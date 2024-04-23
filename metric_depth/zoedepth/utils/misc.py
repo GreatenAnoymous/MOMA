@@ -246,6 +246,9 @@ def compute_ssi_metric(gt, pred, interpolate=True, garg_crop=False, eigen_crop=T
             eval_mask = np.ones(valid_mask.shape)
         
     valid_mask = np.logical_and(valid_mask, eval_mask)
+    scale, shift=compute_scale_and_shift(pred,gt_depth,valid_mask)
+    scaled_prediction=scale.view(-1, 1, 1) * pred + shift.view(-1, 1, 1)
+    return compute_errors(gt_depth[valid_mask], pred[valid_mask])
     
 
 def compute_metrics(gt, pred, interpolate=True, garg_crop=False, eigen_crop=True, dataset='nyu', min_depth_eval=0.1, max_depth_eval=10, **kwargs):
@@ -291,8 +294,7 @@ def compute_metrics(gt, pred, interpolate=True, garg_crop=False, eigen_crop=True
         else:
             eval_mask = np.ones(valid_mask.shape)
     valid_mask = np.logical_and(valid_mask, eval_mask)
-    scale, shift=compute_scale_and_shift(pred,gt_depth)
-    scaled_prediction=scale.view(-1, 1, 1) * pred + shift.view(-1, 1, 1)
+
     return compute_errors(gt_depth[valid_mask], pred[valid_mask])
 
 
