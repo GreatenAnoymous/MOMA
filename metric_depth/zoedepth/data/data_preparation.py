@@ -367,11 +367,11 @@ def process_data(
     depth = (depth - depth_min) / (depth_max - depth_min)
 
     data_dict = {
-        'rgb': torch.FloatTensor(rgb),
-        'depth': torch.FloatTensor(depth),
+        'image': torch.FloatTensor(rgb),
+        'depth_raw': torch.FloatTensor(depth),
         'depth_min': torch.tensor(depth_min),
         'depth_max': torch.tensor(depth_max),
-        'depth_gt': torch.FloatTensor(depth_gt),
+        'depth': torch.FloatTensor(depth_gt),
         'depth_gt_mask': torch.BoolTensor(depth_gt_mask),
         'scene_mask': torch.tensor(scene_mask),
         'zero_mask': torch.BoolTensor(zero_mask),

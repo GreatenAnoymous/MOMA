@@ -172,7 +172,9 @@ class ClearGraspSynthetic(Dataset):
     
 
 
-def get_cleargrasp_loader(config,batch_size=1,**kwargs):
-
-    dataloader=DataLoader(ClearGraspRealWorld(config.cleargrasp_root,split='test'),batch_size=batch_size,**kwargs)
+def get_cleargrasp_loader(config,mode,batch_size=1,**kwargs):
+    if mode=='train':
+        dataloader=DataLoader(ClearGraspSynthetic(config.cleargrasp_root,split='train'),batch_size=batch_size,**kwargs)
+    else:
+        dataloader=DataLoader(ClearGraspRealWorld(config.cleargrasp_root,split='test'),batch_size=batch_size,**kwargs)
     return dataloader
