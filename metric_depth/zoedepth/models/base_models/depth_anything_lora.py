@@ -87,6 +87,10 @@ class DepthAnythingLoraCore(nn.Module):
             p.requires_grad = False
         self.trainable = False
         return self
+    
+    def get_lr_params(self, lr):
+        return [param for param in self.core.parameters() if param.requires_grad]
+    
 
     def unfreeze(self):
         for p in self.parameters():

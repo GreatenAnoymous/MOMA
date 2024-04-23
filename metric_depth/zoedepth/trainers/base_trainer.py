@@ -230,14 +230,14 @@ class BaseTrainer:
                         if self.config.distributed:
                             dist.barrier()
                         # print(f"Validated: {metrics} on device {self.config.rank}")
-
+            self.save_checkpoint(f"{self.config.experiment_id}_latest.pt")
                 # print(f"Finished step {self.step} on device {self.config.rank}")
                 #################################################################################################
 
         # Save / validate at the end
         self.step += 1  # log as final point
         self.model.eval()
-        self.save_checkpoint(f"{self.config.experiment_id}_latest.pt")
+        
         if self.test_loader:
 
             ################################# Validation loop ##################################################
