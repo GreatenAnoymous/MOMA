@@ -204,7 +204,7 @@ def compute_errors(gt, pred):
                 silog=silog, sq_rel=sq_rel)
 
 
-def compute_ssi_metric(gt, pred, interpolate=True, garg_crop=False, eigen_crop=True, dataset='nyu', min_depth_eval=0.1, max_depth_eval=10, **kwargs):
+def compute_ssi_metrics(gt, pred, interpolate=True, garg_crop=False, eigen_crop=False, dataset='nyu', min_depth_eval=0.1, max_depth_eval=10, **kwargs):
     if 'config' in kwargs:
         config = kwargs['config']
         garg_crop = config.garg_crop
@@ -216,18 +216,18 @@ def compute_ssi_metric(gt, pred, interpolate=True, garg_crop=False, eigen_crop=T
         pred = nn.functional.interpolate(
             pred, gt.shape[-2:], mode='bilinear', align_corners=True)
 
-    pred = pred.squeeze().cpu().numpy()
-    pred[pred < min_depth_eval] = min_depth_eval
-    pred[pred > max_depth_eval] = max_depth_eval
+    pred = pred.squeeze(1).cpu().numpy()
+    # pred[pred < min_depth_eval] = min_depth_eval
+    # pred[pred > max_depth_eval] = max_depth_eval
     pred[np.isinf(pred)] = max_depth_eval
     pred[np.isnan(pred)] = min_depth_eval
 
-    gt_depth = gt.squeeze().cpu().numpy()
+    gt_depth = gt.squeeze(1).cpu().numpy()
     valid_mask = np.logical_and(
         gt_depth > min_depth_eval, gt_depth < max_depth_eval)
 
     if garg_crop or eigen_crop:
-        gt_height, gt_width = gt_depth.shape
+        _, gt_height, gt_width = gt_depth.shape
         eval_mask = np.zeros(valid_mask.shape)
 
         if garg_crop:
@@ -242,13 +242,20 @@ def compute_ssi_metric(gt, pred, interpolate=True, garg_crop=False, eigen_crop=T
             else:
                 # assert gt_depth.shape == (480, 640), "Error: Eigen crop is currently only valid for (480, 640) images"
                 eval_mask[45:471, 41:601] = 1
-        else:
-            eval_mask = np.ones(valid_mask.shape)
-        
+    else:
+        eval_mask = np.ones(valid_mask.shape)
+
+    assert eval_mask.sum()>0, "No eval mask"
+    assert  valid_mask.sum()>0, "No valid mask"    
     valid_mask = np.logical_and(valid_mask, eval_mask)
-    scale, shift=compute_scale_and_shift(pred,gt_depth,valid_mask)
+    assert  valid_mask.sum()>0, "No valid mask" 
+    # scale, shift=compute_scale_and_shift(pred,gt_depth,valid_mask)
+    scale, shift=compute_scale_and_shift(torch.tensor(pred),torch.tensor(gt_depth),torch.tensor(valid_mask))
     scaled_prediction=scale.view(-1, 1, 1) * pred + shift.view(-1, 1, 1)
-    return compute_errors(gt_depth[valid_mask], pred[valid_mask])
+    scaled_prediction=scaled_prediction.cpu().numpy()
+    scaled_prediction[scaled_prediction < min_depth_eval] = min_depth_eval
+    scaled_prediction[scaled_prediction > max_depth_eval] = max_depth_eval
+    return compute_errors(gt_depth[valid_mask], scaled_prediction[valid_mask])
     
 
 def compute_metrics(gt, pred, interpolate=True, garg_crop=False, eigen_crop=True, dataset='nyu', min_depth_eval=0.1, max_depth_eval=10, **kwargs):
@@ -291,8 +298,8 @@ def compute_metrics(gt, pred, interpolate=True, garg_crop=False, eigen_crop=True
             else:
                 # assert gt_depth.shape == (480, 640), "Error: Eigen crop is currently only valid for (480, 640) images"
                 eval_mask[45:471, 41:601] = 1
-        else:
-            eval_mask = np.ones(valid_mask.shape)
+    else:
+        eval_mask = np.ones(valid_mask.shape)
     valid_mask = np.logical_and(valid_mask, eval_mask)
 
     return compute_errors(gt_depth[valid_mask], pred[valid_mask])
