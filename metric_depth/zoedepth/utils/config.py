@@ -115,7 +115,7 @@ DATASETS_CONFIG = {
         "degree": 1.0,
         "do_kb_crop": False,
         "garg_crop": False,
-        "eigen_crop": True
+        "eigen_crop": False
     },
     "ibims": {
         "dataset": "ibims",
