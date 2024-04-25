@@ -29,9 +29,9 @@ from torchvision.transforms import Normalize
 from zoedepth.models.base_models.dpt_dinov2.dpt import DPT_DINOv2
 from zoedepth.models.base_models.depth_anything import *
 from zoedepth.models.base_models.dpt_dinov2.dpt_lora import DPT_DINOv2_Lora
+from .depth_anything import DepthAnythingCore
 
-
-class DepthAnythingLoraCore(nn.Module):
+class DepthAnythingLoraCore(DepthAnythingCore):
     def __init__(self, midas, trainable=False, fetch_features=True, layer_names=('out_conv', 'l4_rn', 'r4', 'r3', 'r2', 'r1'), freeze_bn=False, keep_aspect_ratio=True,
                  img_size=384, **kwargs):
         """Midas Base model used for multi-scale feature extraction.
@@ -45,136 +45,7 @@ class DepthAnythingLoraCore(nn.Module):
             keep_aspect_ratio (bool, optional): Keep the aspect ratio of input images while resizing. Defaults to True.
             img_size (int, tuple, optional): Input resolution. Defaults to 384.
         """
-        super().__init__()
-        self.core = midas
-        self.output_channels = None
-        self.core_out = {}
-        self.trainable = trainable
-        self.fetch_features = fetch_features
-        # midas.scratch.output_conv = nn.Identity()
-        self.handles = []
-        # self.layer_names = ['out_conv','l4_rn', 'r4', 'r3', 'r2', 'r1']
-        self.layer_names = layer_names
-
-        self.set_trainable(trainable)
-        self.set_fetch_features(fetch_features)
-
-        self.prep = PrepForMidas(keep_aspect_ratio=keep_aspect_ratio,
-                                 img_size=img_size, do_resize=kwargs.get('do_resize', True))
-
-        if freeze_bn:
-            self.freeze_bn()
-
-    def set_trainable(self, trainable):
-        self.trainable = trainable
-        if trainable:
-            self.unfreeze()
-        else:
-            self.freeze()
-        return self
-
-    def set_fetch_features(self, fetch_features):
-        self.fetch_features = fetch_features
-        if fetch_features:
-            if len(self.handles) == 0:
-                self.attach_hooks(self.core)
-        else:
-            self.remove_hooks()
-        return self
-
-    def freeze(self):
-        for p in self.parameters():
-            p.requires_grad = False
-        self.trainable = False
-        return self
-    
-    def get_lr_params(self, lr):
-        return [param for param in self.core.parameters() if param.requires_grad]
-    
-
-    def unfreeze(self):
-        for p in self.parameters():
-            p.requires_grad = True
-        self.trainable = True
-        return self
-
-    def freeze_bn(self):
-        for m in self.modules():
-            if isinstance(m, nn.BatchNorm2d):
-                m.eval()
-        return self
-
-    def forward(self, x, denorm=False, return_rel_depth=False):
-        # print('input to midas:', x.shape)
-        with torch.no_grad():
-            if denorm:
-                x = denormalize(x)
-            x = self.prep(x)
-        
-        with torch.set_grad_enabled(self.trainable):
-
-            rel_depth = self.core(x)
-            if not self.fetch_features:
-                return rel_depth
-        out = [self.core_out[k] for k in self.layer_names]
-
-        if return_rel_depth:
-            return rel_depth, out
-        return out
-
-    def get_rel_pos_params(self):
-        for name, p in self.core.pretrained.named_parameters():
-            if "pos_embed" in name:
-                yield p
-
-    def get_enc_params_except_rel_pos(self):
-        for name, p in self.core.pretrained.named_parameters():
-            if "pos_embed" not in name:
-                yield p
-
-    def freeze_encoder(self, freeze_rel_pos=False):
-        if freeze_rel_pos:
-            for p in self.core.pretrained.parameters():
-                p.requires_grad = False
-        else:
-            for p in self.get_enc_params_except_rel_pos():
-                p.requires_grad = False
-        return self
-
-    def attach_hooks(self, midas):
-        if len(self.handles) > 0:
-            self.remove_hooks()
-        if "out_conv" in self.layer_names:
-            self.handles.append(list(midas.depth_head.scratch.output_conv2.children())[
-                                1].register_forward_hook(get_activation("out_conv", self.core_out)))
-        if "r4" in self.layer_names:
-            self.handles.append(midas.depth_head.scratch.refinenet4.register_forward_hook(
-                get_activation("r4", self.core_out)))
-        if "r3" in self.layer_names:
-            self.handles.append(midas.depth_head.scratch.refinenet3.register_forward_hook(
-                get_activation("r3", self.core_out)))
-        if "r2" in self.layer_names:
-            self.handles.append(midas.depth_head.scratch.refinenet2.register_forward_hook(
-                get_activation("r2", self.core_out)))
-        if "r1" in self.layer_names:
-            self.handles.append(midas.depth_head.scratch.refinenet1.register_forward_hook(
-                get_activation("r1", self.core_out)))
-        if "l4_rn" in self.layer_names:
-            self.handles.append(midas.depth_head.scratch.layer4_rn.register_forward_hook(
-                get_activation("l4_rn", self.core_out)))
-
-        return self
-
-    def remove_hooks(self):
-        for h in self.handles:
-            h.remove()
-        return self
-
-    def __del__(self):
-        self.remove_hooks()
-
-    def set_output_channels(self):
-        self.output_channels = [256, 256, 256, 256, 256]
+        super().__init__(midas, trainable, fetch_features, layer_names, freeze_bn, keep_aspect_ratio, img_size, **kwargs)
 
     @staticmethod
     def build(midas_model_type="dinov2_large", train_midas=False, use_pretrained_midas=True, fetch_features=False, freeze_bn=True, force_keep_ar=False, force_reload=False, **kwargs):
@@ -196,21 +67,6 @@ class DepthAnythingLoraCore(nn.Module):
         depth_anything_core.set_output_channels()
         print("Using Lora for fine-tuning Depth-Anything model.")
         return depth_anything_core
-
-    @staticmethod
-    def parse_img_size(config):
-        assert 'img_size' in config
-        if isinstance(config['img_size'], str):
-            assert "," in config['img_size'], "img_size should be a string with comma separated img_size=H,W"
-            config['img_size'] = list(map(int, config['img_size'].split(",")))
-            assert len(
-                config['img_size']) == 2, "img_size should be a string with comma separated img_size=H,W"
-        elif isinstance(config['img_size'], int):
-            config['img_size'] = [config['img_size'], config['img_size']]
-        else:
-            assert isinstance(config['img_size'], list) and len(
-                config['img_size']) == 2, "img_size should be a list of H,W"
-        return config
 
 
 nchannels2models = {

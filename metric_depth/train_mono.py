@@ -38,6 +38,7 @@ import os
 
 os.environ["PYOPENGL_PLATFORM"] = "egl"
 os.environ["WANDB_START_METHOD"] = "thread"
+os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 
 def fix_random_seed(seed: int):
@@ -136,6 +137,7 @@ if __name__ == '__main__':
     config.use_lora = True
     config.batch_size = config.bs
     config.mode = 'train'
+    config.multigpu=False
     if config.root != "." and not os.path.isdir(config.root):
         os.makedirs(config.root)
 
@@ -167,6 +169,7 @@ if __name__ == '__main__':
     config.num_workers = config.workers
     config.ngpus_per_node = ngpus_per_node
     config.nproc_per_node = 1
+    config.distributed=False
     print("Config:")
     pprint(config)
     if config.distributed:
@@ -175,5 +178,8 @@ if __name__ == '__main__':
                  args=(ngpus_per_node, config))
     else:
         if ngpus_per_node == 1:
-            config.gpu = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    
+            config.gpu = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            # config.gpu=torch.device("cpu")
+            
         main_worker(config.gpu, ngpus_per_node, config)

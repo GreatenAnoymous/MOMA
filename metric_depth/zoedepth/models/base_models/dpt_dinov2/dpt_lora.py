@@ -125,6 +125,7 @@ class DPT_DINOv2_Lora(nn.Module):
             
     
     def forward(self, x):
+
         h, w = x.shape[-2:]
 
         features = self.pretrained.get_intermediate_layers(x, 4, return_class_token=True)

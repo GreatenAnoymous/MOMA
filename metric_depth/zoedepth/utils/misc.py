@@ -178,6 +178,7 @@ def compute_errors(gt, pred):
             'rmse_log': Root mean squared error on the log scale
             'silog': Scale invariant log error
     """
+    # print(gt.shape, pred.shape)
     thresh = np.maximum((gt / pred), (pred / gt))
     a1 = (thresh < 1.25).mean()
     a2 = (thresh < 1.25 ** 2).mean()
@@ -300,6 +301,7 @@ def compute_metrics(gt, pred, interpolate=True, garg_crop=False, eigen_crop=True
                 eval_mask[45:471, 41:601] = 1
     else:
         eval_mask = np.ones(valid_mask.shape)
+    assert valid_mask.sum()>0, "No valid mask"
     valid_mask = np.logical_and(valid_mask, eval_mask)
 
     return compute_errors(gt_depth[valid_mask], pred[valid_mask])
@@ -311,10 +313,11 @@ def compute_metrics(gt, pred, interpolate=True, garg_crop=False, eigen_crop=True
 def parallelize(config, model, find_unused_parameters=True):
 
     if config.gpu is not None:
-        torch.cuda.set_device(config.gpu)
+        # torch.cuda.set_device(config.gpu)
         model = model.cuda(config.gpu)
 
     config.multigpu = False
+    config.distributed=False
     if config.distributed:
         # Use DDP
         config.multigpu = True

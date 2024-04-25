@@ -14,6 +14,7 @@ from torchvision import transforms
 from PIL import Image
 from zoedepth.data.preprocess import get_black_border
 from zoedepth.utils.config import DATASETS_CONFIG
+
 def load_ckpt(config, model, checkpoint_dir="./checkpoints", ckpt_type="best"):
     import glob
     import os
@@ -45,8 +46,6 @@ class RelativeTrainer(BaseTrainer):
         super().__init__(config, model, train_loader,
                          test_loader=test_loader, device=device)
         self.device = device
-        # self.silog_loss = SILogLoss()
-        # self.grad_loss = GradL1Loss()
         self.ssi_loss = ScaleAndShiftInvariantLoss()
         self.scaler = amp.GradScaler(enabled=self.config.use_amp)
 
@@ -70,19 +69,15 @@ class RelativeTrainer(BaseTrainer):
 
             output = self.model(images)
             pred_depths = output['metric_depth']
-            loss=self.ssi_loss(pred_depths, depths_gt, mask=mask)
+            loss=self.config.w_si * self.ssi_loss(pred_depths, depths_gt, mask=mask)
+            losses[self.ssi_loss.name] = loss
 
-            # l_si, pred = self.silog_loss(
-            #     pred_depths, depths_gt, mask=mask, interpolate=True, return_interpolated=True)
-            # loss = self.config.w_si * l_si
-            # losses[self.silog_loss.name] = l_si
-
-            # if self.config.w_grad > 0:
-            #     l_grad = self.grad_loss(pred, depths_gt, mask=mask)
-            #     loss = loss + self.config.w_grad * l_grad
-            #     losses[self.grad_loss.name] = l_grad
-            # else:
-            #     l_grad = torch.Tensor([0])
+            if self.config.w_grad > 0:
+                l_grad = self.grad_loss(pred_depths, depths_gt, mask=mask)
+                loss = loss + self.config.w_grad * l_grad
+                losses[self.grad_loss.name] = l_grad
+            else:
+                l_grad = torch.Tensor([0])
 
         self.scaler.scale(loss).backward()
 
