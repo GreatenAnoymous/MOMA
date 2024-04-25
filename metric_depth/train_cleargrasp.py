@@ -38,7 +38,6 @@ import os
 
 os.environ["PYOPENGL_PLATFORM"] = "egl"
 os.environ["WANDB_START_METHOD"] = "thread"
-os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 
 def fix_random_seed(seed: int):
@@ -99,7 +98,8 @@ def main_worker(gpu, ngpus_per_node, config):
         print(f"Total parameters : {total_params}", config.gpu)
         
 
-        train_loader = DepthDataLoader(config, "train").data
+        # train_loader = DepthDataLoader(config, "train").data
+        train_loader = DepthDataLoader(config, "online_eval").data
         test_loader = DepthDataLoader(config, "online_eval").data
 
         trainer = get_trainer(config)(
@@ -135,9 +135,9 @@ if __name__ == '__main__':
         shared_dict = None
     config.shared_dict = shared_dict
     config.use_lora = True
+    config.dataset="cleargrasp"
     config.batch_size = config.bs
     config.mode = 'train'
-    config.multigpu=False
     if config.root != "." and not os.path.isdir(config.root):
         os.makedirs(config.root)
 
@@ -166,10 +166,10 @@ if __name__ == '__main__':
         config.gpu = None
 
     ngpus_per_node = torch.cuda.device_count()
+    config.cleargrasp_root="/common/home/gt286/BinPicking/cleargrasp/data/"
     config.num_workers = config.workers
     config.ngpus_per_node = ngpus_per_node
     config.nproc_per_node = 1
-    config.distributed=False
     print("Config:")
     pprint(config)
     if config.distributed:
@@ -178,8 +178,5 @@ if __name__ == '__main__':
                  args=(ngpus_per_node, config))
     else:
         if ngpus_per_node == 1:
-    
             config.gpu = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-            # config.gpu=torch.device("cpu")
-            
         main_worker(config.gpu, ngpus_per_node, config)

@@ -11,10 +11,10 @@ import Imath
 import random
 import OpenEXR
 import numpy as np
-from utils.functions import get_surface_normal_from_depth
-from utils.constants import DILATION_KERNEL
+# from utils.functions import get_surface_normal_from_depth
+# from utils.constants import DILATION_KERNEL
 from scipy.interpolate import NearestNDInterpolator
-
+DILATION_KERNEL = np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]]).astype(np.uint8)
 
 def chromatic_transform(image):
     """
@@ -288,7 +288,9 @@ def process_data(
     
     data_dict for training and testing.
     """
-
+    # print(depth.shape, "waht")
+    
+    
     depth_original = process_depth(depth.copy(), camera_type = camera_type, depth_min = depth_min, depth_max = depth_max, depth_norm = depth_norm)
     depth_gt_original = process_depth(depth_gt.copy(), camera_type = camera_type,  depth_min = depth_min, depth_max = depth_max, depth_norm = depth_norm)
     depth_gt_mask_original = depth_gt_mask.copy()
@@ -297,6 +299,7 @@ def process_data(
     rgb = cv2.resize(rgb, image_size, interpolation = cv2.INTER_NEAREST)
     depth = cv2.resize(depth, image_size, interpolation = cv2.INTER_NEAREST)
     depth_gt = cv2.resize(depth_gt, image_size, interpolation = cv2.INTER_NEAREST)
+    valid_mask = np.logical_and(depth > depth_min, depth < depth_max)
     depth_gt_mask = cv2.resize(depth_gt_mask, image_size, interpolation = cv2.INTER_NEAREST)
     depth_gt_mask = depth_gt_mask.astype(np.bool_)
 
@@ -339,7 +342,7 @@ def process_data(
 
     # zero mask
     neg_zero_mask = np.where(depth_gt < 0.01, 255, 0).astype(np.uint8)
-    neg_zero_mask_dilated = cv2.dilate(neg_zero_mask, kernel = DILATION_KERNEL)
+    neg_zero_mask_dilated = cv2.dilate(neg_zero_mask, kernel = 5)
     neg_zero_mask[neg_zero_mask != 0] = 1
     neg_zero_mask_dilated[neg_zero_mask_dilated != 0] = 1
     zero_mask = np.logical_not(neg_zero_mask)
@@ -347,6 +350,7 @@ def process_data(
 
     # inpainting depth now
     depth_gt = depth_inpainting(depth_gt)
+ 
 
     # loss mask
     initial_loss_mask = np.logical_and(depth_gt_mask, zero_mask)
@@ -367,7 +371,9 @@ def process_data(
     depth = (depth - depth_min) / (depth_max - depth_min)
 
     data_dict = {
+        'dataset': 'nyu',
         'image': torch.FloatTensor(rgb),
+        'mask': torch.BoolTensor(valid_mask),
         'depth_raw': torch.FloatTensor(depth),
         'depth_min': torch.tensor(depth_min),
         'depth_max': torch.tensor(depth_max),
@@ -392,6 +398,7 @@ def process_data(
         data_dict['depth_gt_mask_original'] = torch.BoolTensor(depth_gt_mask_original)
         data_dict['zero_mask_original'] = torch.BoolTensor(zero_mask_original)
 
-    data_dict['depth_gt_sn'] = get_surface_normal_from_depth(data_dict['depth_gt'].unsqueeze(0), data_dict['fx'].unsqueeze(0), data_dict['fy'].unsqueeze(0), data_dict['cx'].unsqueeze(0), data_dict['cy'].unsqueeze(0)).squeeze(0)
+    # data_dict['depth_gt_sn'] = get_surface_normal_from_depth(data_dict['depth_gt'].unsqueeze(0), data_dict['fx'].unsqueeze(0), data_dict['fy'].unsqueeze(0), data_dict['cx'].unsqueeze(0), data_dict['cy'].unsqueeze(0)).squeeze(0)
+    print(data_dict["image"].shape, data_dict["depth"].shape)
+    return data_dict    
 
-    return data_dict

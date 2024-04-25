@@ -51,7 +51,7 @@ from .vkitti import get_vkitti_loader
 from .vkitti2 import get_vkitti2_loader
 
 from .preprocess import CropParams, get_white_border, get_black_border
-# from .cleargrasp import *
+from .cleargrasp import *
 
 def _is_pil_image(img):
     return isinstance(img, Image.Image)
@@ -80,6 +80,10 @@ class DepthDataLoader(object):
         """
 
         self.config = config
+        
+        if config.dataset=='cleargrasp':
+            self.data= get_cleargrasp_loader(config, mode, batch_size=1, num_workers=1)
+            return 
 
         if config.dataset == 'ibims':
             self.data = get_ibims_loader(config, batch_size=1, num_workers=1)

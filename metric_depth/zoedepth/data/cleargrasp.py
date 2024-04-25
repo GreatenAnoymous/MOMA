@@ -48,6 +48,7 @@ class ClearGraspRealWorld(Dataset):
             for camera_type in ['d415', 'd435']:
                 cur_path = os.path.join(data_dir, 'cleargrasp-dataset-test-val', data_type, camera_type)
                 if not os.path.exists(cur_path):
+                    # raise FileNotFoundError(f'Path {cur_path} does not exist.')
                     continue
                 cur_image_paths = sorted(glob(os.path.join(cur_path, '*-transparent-rgb-img.jpg')))
                 cur_mask_paths = [p.replace('-transparent-rgb-img.jpg', '-mask.png') for p in cur_image_paths]
@@ -88,7 +89,7 @@ class ClearGraspRealWorld(Dataset):
         depth_gt_mask[depth_gt_mask != 0] = 1
         camera_intrinsics = self.get_camera_intrinsics(id)
         
-        return process_data(rgb, depth, depth_gt, depth_gt_mask, camera_intrinsics, scene_type = "isolated", camera_type = 10 split = self.split, image_size = self.image_size, depth_min = self.depth_min, depth_max = self.depth_max, depth_norm = self.depth_norm, use_aug = False, with_original = self.with_original)
+        return process_data(rgb, depth, depth_gt, depth_gt_mask, camera_intrinsics, scene_type = "isolated", camera_type = 0, split = self.split, image_size = self.image_size, depth_min = self.depth_min, depth_max = self.depth_max, depth_norm = self.depth_norm, use_aug = False, with_original = self.with_original)
 
     def __len__(self):
         return len(self.image_paths)

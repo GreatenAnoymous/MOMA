@@ -65,7 +65,7 @@ class Trainer(BaseTrainer):
 
             output = self.model(images)
             pred_depths = output['metric_depth']
-
+            print("ddddebug",pred_depths.shape, images.shape,depths_gt.shape,mask.shape)
             l_si, pred = self.silog_loss(
                 pred_depths, depths_gt, mask=mask, interpolate=True, return_interpolated=True)
             loss = self.config.w_si * l_si
