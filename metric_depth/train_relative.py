@@ -173,7 +173,7 @@ class RelativeTrainer(BaseTrainer):
             l_depth = self.ssi_loss(
                 pred_depths, depths_gt, mask=mask.to(torch.bool), interpolate=True)
 
-        metrics = compute_metrics(depths_gt, pred_depths, **self.config)
+        metrics = compute_ssi_metrics(depths_gt, pred_depths, **self.config)
         losses = {f"{self.ssi_loss.name}": l_depth.item()}
 
         if val_step == 1 and self.should_log:
@@ -247,7 +247,7 @@ if __name__ == '__main__':
         shared_dict = None
     config.shared_dict = shared_dict
     config.use_lora = True
-    config.trai
+
     config.batch_size = config.bs
     config.mode = 'train'
     config.multigpu=False
