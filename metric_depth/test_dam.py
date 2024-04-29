@@ -95,7 +95,7 @@ class DAM(object):
         from zoedepth.models.model_io import load_wts
     
         # checkpoint="./checkpoints/depth_anything_vitl14.pth"
-        checkpoint="./depth_anything_finetune/clearpose_dam.pt"
+        checkpoint="./depth_anything_finetune/ZoeDepthv1_24-Apr_15-33-0b38ad832d3c_best.pt"
         
         config=get_config("zoedepth", "train", "nyu")
         depth_anything = build_model(config)
@@ -190,8 +190,11 @@ dam =DAM()
 # depth=exr_loader("/mnt/ssd_990/teng/BinPicking/cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000000-transparent-depth-img.exr", ndim = 1, ndim_representation = ['R'])
 # image = cv2.imread("/mnt/ssd_990/teng/BinPicking/cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000001-transparent-rgb-img.jpg")
 from PIL import Image
-image=cv2.imread("/mnt/ssd_990/teng/BinPicking/DPT_transparent_objects/metric_depth/data/nyu/transcg/scene83/12/rgb1.png")
-depth =np.array(Image.open("/mnt/ssd_990/teng/BinPicking/DPT_transparent_objects/metric_depth/data/nyu/transcg/scene83/12/depth1-gt.png"))
+# image=cv2.imread("/mnt/ssd_990/teng/BinPicking/DPT_transparent_objects/metric_depth/data/nyu/transcg/scene83/12/rgb1.png")
+# depth =np.array(Image.open("/mnt/ssd_990/teng/BinPicking/DPT_transparent_objects/metric_depth/data/nyu/transcg/scene83/12/depth1-gt.png"))
+
+image= cv2.imread("../../object_dataset/object_dataset_14/17_color.png")
+depth=np.array(Image.open("../../object_dataset/object_dataset_14/17_gt_depth.png"))
 
 depth = dam.predictDepth(image, depth/1000)
 # dam.dump_to_pointcloud(image)

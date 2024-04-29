@@ -1,19 +1,24 @@
-from zoedepth.utils.misc import count_parameters, parallelize, compute_metrics, compute_errors
+from zoedepth.utils.misc import count_parameters, parallelize, compute_metrics, compute_ssi_metrics
 from zoedepth.trainers.base_trainer import BaseTrainer
 from zoedepth.trainers.loss import ScaleAndShiftInvariantLoss
 from zoedepth.data.data_mono import DepthDataLoader
+from zoedepth.utils.config import get_config
 import torch.utils.data.distributed
+from zoedepth.utils.arg_utils import parse_unknown
 import torch.multiprocessing as mp
 import torch
 import numpy as np
 import torch.cuda.amp as amp
 import argparse
 import os
+from pprint import pprint
 import torch.nn as nn
 from torchvision import transforms
 from PIL import Image
 from zoedepth.data.preprocess import get_black_border
 from zoedepth.utils.config import DATASETS_CONFIG
+from zoedepth.models.base_models.depth_anything_lora import DepthAnythingLoraCore
+from zoedepth.trainers.loss import GradL1Loss
 
 def load_ckpt(config, model, checkpoint_dir="./checkpoints", ckpt_type="best"):
     import glob
@@ -48,6 +53,7 @@ class RelativeTrainer(BaseTrainer):
         self.device = device
         self.ssi_loss = ScaleAndShiftInvariantLoss()
         self.scaler = amp.GradScaler(enabled=self.config.use_amp)
+        self.grad_loss=GradL1Loss()
 
     def train_on_batch(self, batch, train_step):
         """
@@ -67,8 +73,8 @@ class RelativeTrainer(BaseTrainer):
 
         with amp.autocast(enabled=self.config.use_amp):
 
-            output = self.model(images)
-            pred_depths = output['metric_depth']
+            real_depth, = self.model(images)
+            pred_depths =  real_depth
             loss=self.config.w_si * self.ssi_loss(pred_depths, depths_gt, mask=mask)
             losses[self.ssi_loss.name] = loss
 
@@ -88,16 +94,16 @@ class RelativeTrainer(BaseTrainer):
 
         self.scaler.step(self.optimizer)
 
-        if self.should_log and (self.step % int(self.config.log_images_every * self.iters_per_epoch)) == 0:
-            # -99 is treated as invalid depth in the log_images function and is colored grey.
-            depths_gt[torch.logical_not(mask)] = -99
+        # if self.should_log and (self.step % int(self.config.log_images_every * self.iters_per_epoch)) == 0:
+        #     # -99 is treated as invalid depth in the log_images function and is colored grey.
+        #     depths_gt[torch.logical_not(mask)] = -99
 
-            self.log_images(rgb={"Input": images[0, ...]}, depth={"GT": depths_gt[0], "PredictedMono": pred_depths[0]}, prefix="Train",
-                            min_depth=DATASETS_CONFIG[dataset]['min_depth'], max_depth=DATASETS_CONFIG[dataset]['max_depth'])
+        #     self.log_images(rgb={"Input": images[0, ...]}, depth={"GT": depths_gt[0], "PredictedMono": pred_depths[0]}, prefix="Train",
+        #                     min_depth=DATASETS_CONFIG[dataset]['min_depth'], max_depth=DATASETS_CONFIG[dataset]['max_depth'])
 
-            if self.config.get("log_rel", False):
-                self.log_images(
-                    scalar_field={"RelPred": output["relative_depth"][0]}, prefix="TrainRel")
+        #     if self.config.get("log_rel", False):
+        #         self.log_images(
+        #             scalar_field={"RelPred": output["relative_depth"][0]}, prefix="TrainRel")
 
         self.scaler.update()
         self.optimizer.zero_grad()
@@ -164,11 +170,11 @@ class RelativeTrainer(BaseTrainer):
         pred_depths = pred_depths.squeeze().unsqueeze(0).unsqueeze(0)
 
         with amp.autocast(enabled=self.config.use_amp):
-            l_depth = self.silog_loss(
+            l_depth = self.ssi_loss(
                 pred_depths, depths_gt, mask=mask.to(torch.bool), interpolate=True)
 
         metrics = compute_metrics(depths_gt, pred_depths, **self.config)
-        losses = {f"{self.silog_loss.name}": l_depth.item()}
+        losses = {f"{self.ssi_loss.name}": l_depth.item()}
 
         if val_step == 1 and self.should_log:
             depths_gt[torch.logical_not(mask)] = -99
@@ -176,3 +182,117 @@ class RelativeTrainer(BaseTrainer):
                             min_depth=DATASETS_CONFIG[dataset]['min_depth'], max_depth=DATASETS_CONFIG[dataset]['max_depth'])
 
         return metrics, losses
+
+
+def fix_random_seed(seed: int):
+    import random
+
+    import numpy
+    import torch
+
+    random.seed(seed)
+    numpy.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = True
+
+
+def main_worker(gpu,config):
+    try:
+        seed = config.seed if 'seed' in config and config.seed else 43
+        fix_random_seed(seed)
+        config.gpu=gpu
+        model=DepthAnythingLoraCore.build()
+        model=parallelize(config,model)
+
+  
+        total_params = f"{round(count_parameters(model)/1e6,2)}M"
+        config.total_params = total_params
+        print(f"Total parameters : {total_params}", config.gpu)
+        
+        train_loader = DepthDataLoader(config, "train").data
+        test_loader = DepthDataLoader(config, "online_eval").data
+
+        trainer = RelativeTrainer(config, model, train_loader, test_loader=test_loader)
+        trainer.train()
+        
+    finally:
+        import wandb
+        wandb.finish()
+    
+
+if __name__ == '__main__':
+    mp.set_start_method('forkserver')
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-m", "--model", type=str, default="synunet")
+    parser.add_argument("-d", "--dataset", type=str, default='nyu')
+    parser.add_argument("--trainer", type=str, default=None)
+
+    args, unknown_args = parser.parse_known_args()
+    overwrite_kwargs = parse_unknown(unknown_args)
+
+    overwrite_kwargs["model"] = args.model
+    if args.trainer is not None:
+        overwrite_kwargs["trainer"] = args.trainer
+
+    config = get_config(args.model, "train", args.dataset, **overwrite_kwargs)
+    # git_commit()
+    if config.use_shared_dict:
+        shared_dict = mp.Manager().dict()
+    else:
+        shared_dict = None
+    config.shared_dict = shared_dict
+    config.use_lora = True
+    config.trai
+    config.batch_size = config.bs
+    config.mode = 'train'
+    config.multigpu=False
+    if config.root != "." and not os.path.isdir(config.root):
+        os.makedirs(config.root)
+
+    try:
+        node_str = os.environ['SLURM_JOB_NODELIST'].replace(
+            '[', '').replace(']', '')
+        nodes = node_str.split(',')
+
+        config.world_size = len(nodes)
+        config.rank = int(os.environ['SLURM_PROCID'])
+        # config.save_dir = "/ibex/scratch/bhatsf/videodepth/checkpoints"
+
+    except KeyError as e:
+        # We are NOT using SLURM
+        config.world_size = 1
+        config.rank = 0
+        nodes = ["127.0.0.1"]
+
+    if config.distributed:
+
+        print(config.rank)
+        port = np.random.randint(15000, 15025)
+        config.dist_url = 'tcp://{}:{}'.format(nodes[0], port)
+        print(config.dist_url)
+        config.dist_backend = 'nccl'
+        config.gpu = None
+
+    ngpus_per_node = torch.cuda.device_count()
+    config.num_workers = config.workers
+    config.ngpus_per_node = ngpus_per_node
+    config.nproc_per_node = 1
+    config.distributed=False
+    print("Config:")
+    pprint(config)
+    if config.distributed:
+        config.world_size = ngpus_per_node * config.world_size
+        mp.spawn(main_worker, nprocs=ngpus_per_node,
+                 args=(ngpus_per_node, config))
+    else:
+        if ngpus_per_node == 1:
+    
+            config.gpu = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            # config.gpu=torch.device("cpu")
+            
+        main_worker(config.gpu,  config)

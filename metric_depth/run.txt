@@ -1,1 +1,1 @@
-CUDA_VISIBLE_DEVICES=0 python train_mono.py -m zoedepth
+CUDA_VISIBLE_DEVICES=4 python train_mono.py -m zoedepth

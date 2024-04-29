@@ -67,6 +67,14 @@ class DepthAnythingLoraCore(DepthAnythingCore):
         depth_anything_core.set_output_channels()
         print("Using Lora for fine-tuning Depth-Anything model.")
         return depth_anything_core
+    
+    def  get_lr_params(self, lr):
+        lr_params = []
+        for param in self.core.parameters():
+            # if param.requires_grad:
+            lr_params.append({'params': param, 'lr': lr})
+        print("dddddebug", len(lr_params), "params to be trained.")
+        return lr_params
 
 
 nchannels2models = {
