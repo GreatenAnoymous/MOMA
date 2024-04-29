@@ -98,8 +98,8 @@ def main_worker(gpu, ngpus_per_node, config):
         print(f"Total parameters : {total_params}", config.gpu)
         
 
-        # train_loader = DepthDataLoader(config, "train").data
-        train_loader = DepthDataLoader(config, "online_eval").data
+        train_loader = DepthDataLoader(config, "train").data
+        # train_loader = DepthDataLoader(config, "online_eval").data
         test_loader = DepthDataLoader(config, "online_eval").data
 
         trainer = get_trainer(config)(
@@ -166,7 +166,7 @@ if __name__ == '__main__':
         config.gpu = None
 
     ngpus_per_node = torch.cuda.device_count()
-    config.cleargrasp_root="/common/home/gt286/BinPicking/cleargrasp/data/"
+    config.cleargrasp_root="/mnt/ssd_990/teng/BinPicking/cleargrasp/"
     config.num_workers = config.workers
     config.ngpus_per_node = ngpus_per_node
     config.nproc_per_node = 1

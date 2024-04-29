@@ -44,7 +44,7 @@ def depth2PointCloudFakeDepth(depth, rgb, depth_scale, clip_distance_max, intrin
     # print(intrinsics.fx, intrinsics.fy, intrinsics.ppx, intrinsics.ppy, "intrinsics")
         # 595.429443359375 595.7514038085938 321.8606872558594 239.07879638671875 intrinsics
 
-    print(depth,"depth_scale")
+    
 
     rows,cols  = depth.shape
     print(rows,cols,"rows,cols")

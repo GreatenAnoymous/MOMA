@@ -179,3 +179,8 @@ def get_cleargrasp_loader(config,mode,batch_size=1,**kwargs):
     else:
         dataloader=DataLoader(ClearGraspRealWorld(config.cleargrasp_root,split='test'),batch_size=batch_size,**kwargs)
     return dataloader
+
+
+if __name__=="__main__":
+    depth_gt = exr_loader("/mnt/ssd_990/teng/BinPicking/cleargrasp/cleargrasp-dataset-train/cup-with-waves-train/depth-imgs-rectified/000000000-depth-rectified.exr", ndim = 1, ndim_representation = ['R'])
+    print(depth_gt)

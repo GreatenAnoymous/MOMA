@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import os
 import sys
+from exr_utils import exr_loader
 from zoedepth.utils.config import get_config
 from importlib import import_module
 project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../'))
@@ -15,13 +16,22 @@ import create_pc
 # print(project_path+"/torchhub/facebookresearch_dinov2_main")
 from zoedepth.models.depth_model import DepthModel
 from zoedepth.models.builder import build_model
+from zoedepth.trainers.loss import ScaleAndShiftInvariantLoss, compute_scale_and_shift
+
+# class CameraIntrinsic:
+#     def __init__(self,fx=595.429443359375,fy=595.7514038085938,ppx=321.8606872558594,ppy=239.07879638671875) -> None:
+#         self.fx = fx
+#         self.fy = fy
+#         self.ppx = ppx
+#         self.ppy = ppy
 
 class CameraIntrinsic:
-    def __init__(self,fx=595.429443359375,fy=595.7514038085938,ppx=321.8606872558594,ppy=239.07879638671875) -> None:
+    def __init__(self,fx=900,fy=900,ppx=321.8606872558594,ppy=239.07879638671875) -> None:
         self.fx = fx
         self.fy = fy
         self.ppx = ppx
         self.ppy = ppy
+
 
 def build_model(config) -> DepthModel:
     """Builds a model from a config. The model is specified by the model name and version in the config. The model is then constructed using the build_from_config function of the model interface.
@@ -80,11 +90,12 @@ class DAM(object):
         pass
     
     
-    def predictDepth(self, image, DEVICE="cuda"):
+    def predictDepth(self, image, depth=None, DEVICE="cuda"):
+        
         from zoedepth.models.model_io import load_wts
-        checkpoint="./model_weights.pth"
+    
         # checkpoint="./checkpoints/depth_anything_vitl14.pth"
-        # checkpoint="./depth_anything_finetune/ZoeDepthv1_03-Apr_15-44-85d899fe7050_best.pt"
+        checkpoint="./depth_anything_finetune/clearpose_dam.pt"
         
         config=get_config("zoedepth", "train", "nyu")
         depth_anything = build_model(config)
@@ -93,9 +104,25 @@ class DAM(object):
         depth_anything = depth_anything.to(DEVICE)
 
         from PIL import Image
-        image = Image.open("/common/home/gt286/BinPicking/Depth-Anything/metric_depth/data/nyu/transcg/scene18/0/rgb1.png").convert("RGB")  # load
+        # depth_numpy=Image.open("/mnt/ssd_990/teng/BinPicking/cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000000-transparent-rgb-img.jpg").convert("RGB")  # load
+        # image = Image.open("/common/home/gt286/BinPicking/Depth-Anything/metric_depth/data/nyu/transcg/scene18/0/rgb1.png").convert("RGB")  # load
         depth_numpy = depth_anything.infer_pil(image)  # as numpy
+        
         print(depth_numpy)
+        # print(depth)
+        if depth is not None:
+            mask = np.logical_and((depth> 0),(depth<2))
+            
+            print(depth_numpy.shape, depth.shape, torch.tensor(mask).unsqueeze(0).unsqueeze(0).shape)
+            loss=ScaleAndShiftInvariantLoss()
+            # scale,shift=compute_scale_and_shift(torch.tensor(depth_numpy).unsqueeze(0).unsqueeze(0), torch.tensor(depth).unsqueeze(0).unsqueeze(0),torch.tensor(mask).unsqueeze(0).unsqueeze(0))
+            # scaled_prediction = scale.view(-1, 1, 1) * torch.tensor(depth_numpy).unsqueeze(0), + shift.view(-1, 1, 1)
+            # print(scaled_prediction)
+            
+            err=loss(torch.tensor(depth_numpy).unsqueeze(0).unsqueeze(0), torch.tensor(depth).unsqueeze(0).unsqueeze(0),torch.tensor(mask).unsqueeze(0).unsqueeze(0))
+            print(err)
+        
+        
         from zoedepth.utils.misc import colorize
 
         colored = colorize(depth_numpy)
@@ -105,10 +132,10 @@ class DAM(object):
         # depth_pil = depth_anything.infer_pil(image, output_type="pil")  # as 16-bit PIL Image
 
 
-    def dump_to_pointcloud(self,  depth_scale=0.3, clip_distance_max=0.5, intrinsics=CameraIntrinsic()):
+    def dump_to_pointcloud(self, image,  depth_scale=0.3, clip_distance_max=1, intrinsics=CameraIntrinsic()):
         DEVICE="cuda"
         from zoedepth.models.model_io import load_wts
-        checkpoint="./model_weights.pth"
+        checkpoint="./depth_anything_finetune/transcg_dam.pt"
         
         config=get_config("zoedepth", "train", "nyu")
         depth_anything = build_model(config)
@@ -119,10 +146,10 @@ class DAM(object):
         
         # Local file
         from PIL import Image
-        image = Image.open("./frame_color.png").convert("RGB")  # load
+        # image = Image.open("./frame_color.png").convert("RGB")  # load
         rgb = np.array(image)
         depth_numpy = depth_anything.infer_pil(image)  # as numpy
-        depth_numpy=depth_numpy*depth_scale
+        depth_numpy=depth_numpy
         print(depth_numpy)
 
         points=create_pc.depth2PointCloudFakeDepth(depth_numpy, rgb, depth_scale, clip_distance_max, intrinsics)
@@ -135,7 +162,7 @@ def generate_fake_depth(input_folder, output_folder):
     from zoedepth.models.model_io import load_wts
     from PIL import Image
     from zoedepth.utils.misc import colorize
-    checkpoint="./model_weights.pth"
+    checkpoint="./depth_anything_finetune/transcg_dam.pt"
     
     config=get_config("zoedepth", "train", "nyu")
     depth_anything = build_model(config)
@@ -160,11 +187,14 @@ def generate_fake_depth(input_folder, output_folder):
 
     
 dam =DAM()
-# image = cv2.imread("/common/home/gt286/BinPicking/objet_dataset/object_dataset_5/0_color.png")
+# depth=exr_loader("/mnt/ssd_990/teng/BinPicking/cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000000-transparent-depth-img.exr", ndim = 1, ndim_representation = ['R'])
+# image = cv2.imread("/mnt/ssd_990/teng/BinPicking/cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000001-transparent-rgb-img.jpg")
+from PIL import Image
+image=cv2.imread("/mnt/ssd_990/teng/BinPicking/DPT_transparent_objects/metric_depth/data/nyu/transcg/scene83/12/rgb1.png")
+depth =np.array(Image.open("/mnt/ssd_990/teng/BinPicking/DPT_transparent_objects/metric_depth/data/nyu/transcg/scene83/12/depth1-gt.png"))
 
-
-depth = dam.predictDepth(None)
-# dam.dump_to_pointcloud()
+depth = dam.predictDepth(image, depth/1000)
+# dam.dump_to_pointcloud(image)
 
 # generate_fake_depth("/common/home/gt286/BinPicking/objet_dataset/object_dataset_6/", "./fakedepth/")
 

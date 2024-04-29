@@ -342,7 +342,7 @@ def process_data(
 
     # zero mask
     neg_zero_mask = np.where(depth_gt < 0.01, 255, 0).astype(np.uint8)
-    neg_zero_mask_dilated = cv2.dilate(neg_zero_mask, kernel = 5)
+    neg_zero_mask_dilated = cv2.dilate(neg_zero_mask, kernel = DILATION_KERNEL)
     neg_zero_mask[neg_zero_mask != 0] = 1
     neg_zero_mask_dilated[neg_zero_mask_dilated != 0] = 1
     zero_mask = np.logical_not(neg_zero_mask)
@@ -350,6 +350,8 @@ def process_data(
 
     # inpainting depth now
     depth_gt = depth_inpainting(depth_gt)
+    depth_gt=depth_gt/camera_intrinsics[0,0]*902.6
+    depth=depth/camera_intrinsics[0,0]*902.6
  
 
     # loss mask
@@ -366,9 +368,11 @@ def process_data(
         loss_mask_dilated = zero_mask_dilated
 
     # Normalization
-    depth_min = depth.min() - 0.5 * depth.std() - 1e-6
-    depth_max = depth.max() + 0.5 * depth.std() + 1e-6
-    depth = (depth - depth_min) / (depth_max - depth_min)
+    # depth_min = depth.min() - 0.5 * depth.std() - 1e-6
+    # depth_max = depth.max() + 0.5 * depth.std() + 1e-6
+    # depth = (depth - depth_min) / (depth_max - depth_min)
+    
+    
 
     data_dict = {
         'dataset': 'nyu',
@@ -399,6 +403,6 @@ def process_data(
         data_dict['zero_mask_original'] = torch.BoolTensor(zero_mask_original)
 
     # data_dict['depth_gt_sn'] = get_surface_normal_from_depth(data_dict['depth_gt'].unsqueeze(0), data_dict['fx'].unsqueeze(0), data_dict['fy'].unsqueeze(0), data_dict['cx'].unsqueeze(0), data_dict['cy'].unsqueeze(0)).squeeze(0)
-    print(data_dict["image"].shape, data_dict["depth"].shape)
+    # print(data_dict["image"].shape, data_dict["depth"].shape)
     return data_dict    
 

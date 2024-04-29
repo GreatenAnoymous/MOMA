@@ -80,7 +80,7 @@ class DepthDataLoader(object):
         """
 
         self.config = config
-        
+        print(config.dataset,"current dataset")
         if config.dataset=='cleargrasp':
             self.data= get_cleargrasp_loader(config, mode, batch_size=1, num_workers=1)
             return 
@@ -159,7 +159,7 @@ class DepthDataLoader(object):
 
         elif mode == 'online_eval':
             print("Using online eval sampler")
-            self.testing_samples = DataLoadPreprocessWithMask(
+            self.testing_samples = DataLoadPreprocess(
                 config, mode, transform=transform)
             if config.distributed:  # redundant. here only for readability and to be more explicit
                 # Give whole test set to all processes (and report evaluation only on one) regardless
@@ -400,7 +400,8 @@ class DataLoadPreprocess(Dataset):
                     has_valid_depth = True
                 except IOError:
                     depth_gt = False
-                    # print('Missing gt for {}'.format(image_path))
+                    print('Missing gt for {}'.format(image_path))
+                    assert False 
 
                 if has_valid_depth:
                     depth_gt = np.asarray(depth_gt, dtype=np.float32)
@@ -561,7 +562,10 @@ class DataLoadPreprocessWithMask(DataLoadPreprocess):
             image = self.reader.open(image_path)
             depth_gt = self.reader.open(depth_path)
             
-            depth_mask_path = os.path.splitext(depth_path)[0] + "-mask.png"
+            # depth_mask_path = os.path.splitext(depth_path)[0] + "-mask.png"  # for transCG
+            depth_mask_path=depth_path.split("-")[0]+"-label.png" # for clearpose
+            print(depth_mask_path)
+
             depth_mask = self.reader.open(depth_mask_path)
             w, h = image.size
 

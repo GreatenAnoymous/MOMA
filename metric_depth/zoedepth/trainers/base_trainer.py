@@ -181,6 +181,7 @@ class BaseTrainer:
             pbar = tqdm(enumerate(self.train_loader), desc=f"Epoch: {epoch + 1}/{self.config.epochs}. Loop: Train",
                         total=self.iters_per_epoch) if is_rank_zero(self.config) else enumerate(self.train_loader)
             for i, batch in pbar:
+              
                 if self.should_early_stop():
                     print("Early stopping")
                     break
@@ -196,7 +197,7 @@ class BaseTrainer:
 
                 if self.should_log and self.step % 50 == 0:
                     wandb.log({f"Train/{name}": loss.item()
-                              for name, loss in losses.items()}, step=self.step)
+                            for name, loss in losses.items()}, step=self.step)
 
                 self.step += 1
 
@@ -212,13 +213,14 @@ class BaseTrainer:
                         ################################# Validation loop ##################################################
                         # validate on the entire validation set in every process but save only from rank 0, I know, inefficient, but avoids divergence of processes
                         metrics, test_losses = self.validate()
-                        # print("Validated: {}".format(metrics))
+                        assert test_losses is not None
+                        print("Validated: {}".format(metrics))
                         if self.should_log:
                             wandb.log(
                                 {f"Test/{name}": tloss for name, tloss in test_losses.items()}, step=self.step)
 
                             wandb.log({f"Metrics/{k}": v for k,
-                                      v in metrics.items()}, step=self.step)
+                                    v in metrics.items()}, step=self.step)
 
                             if (metrics[self.metric_criterion] < best_loss) and self.should_write:
                                 self.save_checkpoint(
@@ -229,6 +231,8 @@ class BaseTrainer:
 
                         if self.config.distributed:
                             dist.barrier()
+               
+                        
                         # print(f"Validated: {metrics} on device {self.config.rank}")
             self.save_checkpoint(f"{self.config.experiment_id}_latest.pt")
                 # print(f"Finished step {self.step} on device {self.config.rank}")

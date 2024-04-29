@@ -293,13 +293,54 @@ class ScaleAndShiftInvariantLoss(nn.Module):
 
 
         prediction, target, mask = prediction.squeeze(), target.squeeze(), mask.squeeze()
+        if len(prediction.shape) == 2:
+            prediction = prediction.unsqueeze(0)
+            target = target.unsqueeze(0)
+            mask = mask.unsqueeze(0)
         assert prediction.shape == target.shape, f"Shape mismatch: Expected same shape but got {prediction.shape} and {target.shape}."
-
+        
         scale, shift = compute_scale_and_shift(prediction, target, mask)
+        pred_arr= prediction[mask].cpu().detach().numpy()
+        target_arr= target[mask].cpu().detach().numpy()
+        # Convert the numpy arrays to torch tensors
+        pred_arr = np.array(pred_arr)
+        target_arr = np.array(target_arr)
+
+        # Perform linear regression
+        coefficients = np.polyfit(1/pred_arr, 1/target_arr, 1)
+
+        
+        s = coefficients[0]
+        t = coefficients[1]
+
+
+        # Print the values of s and t
+        print("s:", s)
+        print("t:", t)
+        print(1/(s/pred_arr+t), "fitted", target_arr)     
+
+
+        import matplotlib.pyplot as plt
+
+        # Plot the fitting figure
+        plt.scatter(1/pred_arr, 1/target_arr, label='Data')
+        # plt.scatter(pred_arr, target_arr, label='Data')
+        plt.plot(1/pred_arr, s/pred_arr+t , color='red', label='Fitted Line')
+
+        # Calculate the fitting error
+        fitting_error = np.abs(1/(s/pred_arr+t) - 1/target_arr)
+        average_fitting_error = np.mean(fitting_error)
+        print("Average Fitting Error:", average_fitting_error)
+        plt.ylabel('1/target')
+        plt.legend()
+
+        # Save the figure to a PNG file
+        plt.savefig('./fitting.png')
 
         scaled_prediction = scale.view(-1, 1, 1) * prediction + shift.view(-1, 1, 1)
 
         loss = nn.functional.l1_loss(scaled_prediction[mask], target[mask])
+
         if not return_interpolated:
             return loss
         return loss, intr_input

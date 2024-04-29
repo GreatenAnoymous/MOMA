@@ -59,7 +59,8 @@ def infer(model, images, **kwargs):
     pred2 = get_depth_from_prediction(pred2)
     pred2 = torch.flip(pred2, [3])
 
-    mean_pred = 0.5 * (pred1 + pred2)
+    mean_pred = 0.5 * (pred1 + pred2) 
+    
 
     return mean_pred
 
@@ -131,6 +132,8 @@ def eval_model(model_name, pretrained_resource, dataset='nyu', **kwargs):
     # Load default pretrained resource defined in config if not set
     overwrite = {**kwargs, "pretrained_resource": pretrained_resource} if pretrained_resource else kwargs
     config = get_config(model_name, "eval", dataset, **overwrite)
+    config.dataset= "cleargrasp"
+    config.cleargrasp_root="../../cleargrasp/"
     # config = change_dataset(config, dataset)  # change the dataset
     # pprint(config)
     print(f"Evaluating {model_name} on {dataset}...")

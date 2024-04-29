@@ -65,7 +65,7 @@ class Trainer(BaseTrainer):
 
             output = self.model(images)
             pred_depths = output['metric_depth']
-            print("ddddebug",pred_depths.shape, images.shape,depths_gt.shape,mask.shape)
+            # print("ddddebug",pred_depths.shape, images.shape,depths_gt.shape,mask.shape)
             l_si, pred = self.silog_loss(
                 pred_depths, depths_gt, mask=mask, interpolate=True, return_interpolated=True)
             loss = self.config.w_si * l_si
@@ -146,12 +146,14 @@ class Trainer(BaseTrainer):
 
 
     def validate_on_batch(self, batch, val_step):
+        # print(batch["image"].shape, batch["depth"].shape, batch["mask"].shape)
         images = batch['image'].to(self.device)
         depths_gt = batch['depth'].to(self.device)
         dataset = batch['dataset'][0]
         mask = batch["mask"].to(self.device)
         if 'has_valid_depth' in batch:
             if not batch['has_valid_depth']:
+                # print("no valid depth")
                 return None, None
 
         depths_gt = depths_gt.squeeze().unsqueeze(0).unsqueeze(0)
@@ -165,9 +167,11 @@ class Trainer(BaseTrainer):
         with amp.autocast(enabled=self.config.use_amp):
             l_depth = self.silog_loss(
                 pred_depths, depths_gt, mask=mask.to(torch.bool), interpolate=True)
-
+        
         metrics = compute_metrics(depths_gt, pred_depths, **self.config)
+        # print(metrics)
         losses = {f"{self.silog_loss.name}": l_depth.item()}
+        # print(losses)
 
         if val_step == 1 and self.should_log:
             depths_gt[torch.logical_not(mask)] = -99
