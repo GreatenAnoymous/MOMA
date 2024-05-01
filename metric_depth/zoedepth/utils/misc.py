@@ -218,6 +218,10 @@ def compute_errors(gt, pred):
 def compute_ssi_metrics(gt, pred, interpolate=True, garg_crop=False, eigen_crop=False, dataset='nyu', min_depth_eval=0.1, max_depth_eval=10, **kwargs):
     gt=gt.squeeze(1)
     pred=pred.squeeze(1)
+<<<<<<< HEAD
+=======
+
+>>>>>>> 7e69d2c0b1472ce48c57edfc3e78b43c6ffcad14
 
     print(gt.shape, pred.shape)
     valid_mask = torch.logical_and(gt>min_depth_eval, gt<max_depth_eval)

@@ -44,8 +44,6 @@ def load_ckpt(config, model, checkpoint_dir="./checkpoints", ckpt_type="best"):
     return model
 
 
-
-
 class RelativeTrainer(BaseTrainer):
     def __init__(self, config, model, train_loader, test_loader=None, device=None):
         super().__init__(config, model, train_loader,
@@ -101,7 +99,6 @@ class RelativeTrainer(BaseTrainer):
                 self.model.parameters(), self.config.clip_grad)
 
         self.scaler.step(self.optimizer)
-
         # if self.should_log and (self.step % int(self.config.log_images_every * self.iters_per_epoch)) == 0:
         #     # -99 is treated as invalid depth in the log_images function and is colored grey.
         #     depths_gt[torch.logical_not(mask)] = -99
@@ -112,7 +109,6 @@ class RelativeTrainer(BaseTrainer):
         #     if self.config.get("log_rel", False):
         #         self.log_images(
         #             scalar_field={"RelPred": output["relative_depth"][0]}, prefix="TrainRel")
-
         self.scaler.update()
         self.optimizer.zero_grad()
 
@@ -177,10 +173,10 @@ class RelativeTrainer(BaseTrainer):
 
         depths_gt = depths_gt.squeeze().unsqueeze(0).unsqueeze(0)
         mask = mask.squeeze().unsqueeze(0).unsqueeze(0)
-        if dataset == 'nyu':
-            pred_depths = self.crop_aware_infer(images)
-        else:
-            pred_depths = self.eval_infer(images)
+        # if dataset == 'nyu':
+        #     pred_depths = self.crop_aware_infer(images)
+        # else:
+        pred_depths = self.eval_infer(images)
         pred_depths = pred_depths.squeeze().unsqueeze(0).unsqueeze(0)
         
         with amp.autocast(enabled=self.config.use_amp):
