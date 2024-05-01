@@ -218,7 +218,6 @@ def compute_errors(gt, pred):
 def compute_ssi_metrics(gt, pred, interpolate=True, garg_crop=False, eigen_crop=False, dataset='nyu', min_depth_eval=0.1, max_depth_eval=10, **kwargs):
     gt=gt.squeeze(1)
     pred=pred.squeeze(1)
-    gt_disparity=torch.zeros_like(gt)
 
 
     valid_mask = torch.logical_and(gt>min_depth_eval, gt<max_depth_eval)
@@ -234,7 +233,7 @@ def compute_ssi_metrics(gt, pred, interpolate=True, garg_crop=False, eigen_crop=
     
     scaled_pred=1/scaled_disparity
     scaled_pred=scaled_pred.cpu().numpy()
-    scaled_pred[np.isinf(scaled_pred)] = max_depth_eval
+    scaled_pred[scaled_pred>max_depth_eval] = max_depth_eval
     scaled_pred[scaled_pred < min_depth_eval] = min_depth_eval
 
     
