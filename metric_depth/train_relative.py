@@ -1,6 +1,6 @@
 from zoedepth.utils.misc import count_parameters, parallelize, compute_metrics, compute_ssi_metrics
 from zoedepth.trainers.base_trainer import BaseTrainer
-from zoedepth.trainers.loss import ScaleAndShiftInvariantLoss
+from zoedepth.trainers.loss import ScaleAndShiftInvariantLoss, TrimmedMaeLoss
 from zoedepth.data.data_mono import DepthDataLoader
 from zoedepth.utils.config import get_config
 import torch.utils.data.distributed
@@ -51,6 +51,7 @@ class RelativeTrainer(BaseTrainer):
         super().__init__(config, model, train_loader,
                          test_loader=test_loader, device=device)
         self.device = device
+        self.model=model.to(device)
         self.ssi_loss = ScaleAndShiftInvariantLoss()
         self.scaler = amp.GradScaler(enabled=self.config.use_amp)
         self.grad_loss=GradL1Loss()
@@ -67,14 +68,20 @@ class RelativeTrainer(BaseTrainer):
         dataset = batch['dataset'][0]
 
         b, c, h, w = images.size()
+    
         mask = batch["mask"].to(self.device).to(torch.bool)
 
+        # assert next(self.model.parameters()).is_cuda
+        # assert images.device == self.device, f"Image device {images.device} does not match model device {self.device}"
         losses = {}
 
         with amp.autocast(enabled=self.config.use_amp):
+        
+        
+            pred_depths= self.model(images, denorm=False, return_rel_depth=True)
+            pred_depths=pred_depths.unsqueeze(1)
+            pred_depths = nn.functional.interpolate(pred_depths, size=(h, w), mode='bilinear', align_corners=False)
 
-            real_depth, = self.model(images)
-            pred_depths =  real_depth
             loss=self.config.w_si * self.ssi_loss(pred_depths, depths_gt, mask=mask)
             losses[self.ssi_loss.name] = loss
 
@@ -113,8 +120,13 @@ class RelativeTrainer(BaseTrainer):
     @torch.no_grad()
     def eval_infer(self, x):
         with amp.autocast(enabled=self.config.use_amp):
-            m = self.model.module if self.config.multigpu else self.model
-            pred_depths = m(x)['metric_depth']
+            b, c, h, w =x.size()
+            # m = self.model.module if self.config.multigpu else self.model
+            # pred_depths = m(x)['metric_depth']
+            pred_depths= self.model(x, denorm=False, return_rel_depth=True)
+            pred_depths=pred_depths.unsqueeze(1)
+            pred_depths = nn.functional.interpolate(pred_depths, size=(h, w), mode='bilinear', align_corners=False)
+
         return pred_depths
 
     @torch.no_grad()
@@ -168,10 +180,10 @@ class RelativeTrainer(BaseTrainer):
         else:
             pred_depths = self.eval_infer(images)
         pred_depths = pred_depths.squeeze().unsqueeze(0).unsqueeze(0)
-
+        
         with amp.autocast(enabled=self.config.use_amp):
             l_depth = self.ssi_loss(
-                pred_depths, depths_gt, mask=mask.to(torch.bool), interpolate=True)
+                pred_depths, depths_gt, mask=mask.to(torch.bool))
 
         metrics = compute_ssi_metrics(depths_gt, pred_depths, **self.config)
         losses = {f"{self.ssi_loss.name}": l_depth.item()}
@@ -205,10 +217,10 @@ def main_worker(gpu,config):
         seed = config.seed if 'seed' in config and config.seed else 43
         fix_random_seed(seed)
         config.gpu=gpu
-        model=DepthAnythingLoraCore.build()
+        model=DepthAnythingLoraCore.build(**config)
         model=parallelize(config,model)
-
-  
+        print(len([p for p in model.parameters() if p.requires_grad]), "Total Learnable Parameters")
+        
         total_params = f"{round(count_parameters(model)/1e6,2)}M"
         config.total_params = total_params
         print(f"Total parameters : {total_params}", config.gpu)
@@ -216,15 +228,44 @@ def main_worker(gpu,config):
         train_loader = DepthDataLoader(config, "train").data
         test_loader = DepthDataLoader(config, "online_eval").data
 
-        trainer = RelativeTrainer(config, model, train_loader, test_loader=test_loader)
+        trainer = RelativeTrainer(config, model, train_loader, test_loader=test_loader, device=config.gpu)
         trainer.train()
         
     finally:
         import wandb
         wandb.finish()
-    
 
-if __name__ == '__main__':
+
+def test_dam():
+    from PIL import Image
+    import cv2
+    import torch.nn.functional as F
+
+    image= cv2.imread("../000.jpg")
+    # depth=np.array(Image.open("../../object_dataset/object_dataset_14/17_gt_depth.png"))
+    image=torch.tensor(np.array(image))
+    image=image.permute(2,0,1)
+    image=image.unsqueeze(0).float()
+    image=image/255.0
+    b,c,w,h=image.shape
+    print(image.shape,"000 shape")
+    model=DepthAnythingLoraCore.build()
+    
+    output=model(image, denorm=False, return_rel_depth=True)
+    output=1/output
+    print("output shape",output.shape)
+    depth=F.interpolate(output.unsqueeze(0), size=(w, h), mode='bilinear', align_corners=False)
+    print(output.shape, depth.shape)
+    depth = (depth - depth.min()) / (depth.max() - depth.min()) * 255.0
+        
+    depth = depth.cpu().numpy().astype(np.uint8)
+    depth=depth.squeeze()
+    depth = np.repeat(depth[..., np.newaxis], 3, axis=-1)
+    print(depth.shape)
+    cv2.imwrite("output_colored.png", depth)
+
+
+def main_func():
     mp.set_start_method('forkserver')
 
     parser = argparse.ArgumentParser()
@@ -291,8 +332,14 @@ if __name__ == '__main__':
                  args=(ngpus_per_node, config))
     else:
         if ngpus_per_node == 1:
-    
+            print("Using single GPU")
             config.gpu = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
             # config.gpu=torch.device("cpu")
-            
+        print(config.gpu,"the gpu")   
         main_worker(config.gpu,  config)
+
+
+if __name__ == '__main__':
+    # test_dam()
+    main_func()
+    

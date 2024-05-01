@@ -71,9 +71,9 @@ class DepthAnythingLoraCore(DepthAnythingCore):
     def  get_lr_params(self, lr):
         lr_params = []
         for param in self.core.parameters():
-            # if param.requires_grad:
-            lr_params.append({'params': param, 'lr': lr})
-        print("dddddebug", len(lr_params), "params to be trained.")
+            if param.requires_grad:
+                lr_params.append({'params': param, 'lr': lr})
+    
         return lr_params
 
 

@@ -181,7 +181,7 @@ class BaseTrainer:
             pbar = tqdm(enumerate(self.train_loader), desc=f"Epoch: {epoch + 1}/{self.config.epochs}. Loop: Train",
                         total=self.iters_per_epoch) if is_rank_zero(self.config) else enumerate(self.train_loader)
             for i, batch in pbar:
-              
+                
                 if self.should_early_stop():
                     print("Early stopping")
                     break
@@ -206,9 +206,9 @@ class BaseTrainer:
                 if self.test_loader:
                     if (self.step % validate_every) == 0:
                         self.model.eval()
-                        if self.should_write:
-                            self.save_checkpoint(
-                                f"{self.config.experiment_id}_latest.pt")
+                        # if self.should_write:
+                        #     self.save_checkpoint(
+                        #         f"{self.config.experiment_id}_latest.pt")
 
                         ################################# Validation loop ##################################################
                         # validate on the entire validation set in every process but save only from rank 0, I know, inefficient, but avoids divergence of processes
@@ -234,7 +234,7 @@ class BaseTrainer:
                
                         
                         # print(f"Validated: {metrics} on device {self.config.rank}")
-            self.save_checkpoint(f"{self.config.experiment_id}_latest.pt")
+            # self.save_checkpoint(f"{self.config.experiment_id}_latest.pt")
                 # print(f"Finished step {self.step} on device {self.config.rank}")
                 #################################################################################################
 

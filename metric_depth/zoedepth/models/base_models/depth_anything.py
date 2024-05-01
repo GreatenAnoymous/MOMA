@@ -214,7 +214,7 @@ class DepthAnythingCore(nn.Module):
         # self.layer_names = ['out_conv','l4_rn', 'r4', 'r3', 'r2', 'r1']
         self.layer_names = layer_names
 
-        self.set_trainable(trainable)
+        # self.set_trainable(trainable)
         self.set_fetch_features(fetch_features)
 
         self.prep = PrepForMidas(keep_aspect_ratio=keep_aspect_ratio,
@@ -264,12 +264,13 @@ class DepthAnythingCore(nn.Module):
             if denorm:
                 x = denormalize(x)
             x = self.prep(x)
-        
         with torch.set_grad_enabled(self.trainable):
 
             rel_depth = self.core(x)
             if not self.fetch_features:
+            
                 return rel_depth
+        
         out = [self.core_out[k] for k in self.layer_names]
 
         if return_rel_depth:

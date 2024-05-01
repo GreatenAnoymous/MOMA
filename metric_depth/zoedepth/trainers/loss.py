@@ -37,6 +37,80 @@ def extract_key(prediction, key):
         return prediction[key]
     return prediction
 
+##############
+
+
+def trimmed_mae_loss(prediction, target, mask, trim=0.2):
+    M = torch.sum(mask, (1, 2))
+    res = prediction - target
+
+    res = res[mask.bool()].abs()
+
+    trimmed, _ = torch.sort(res.view(-1), descending=False)[
+        : int(len(res) * (1.0 - trim))
+    ]
+
+    return trimmed.sum() / (2 * M.sum())
+
+def reduction_batch_based(image_loss, M):
+    # average of all valid pixels of the batch
+
+    # avoid division by 0 (if sum(M) = sum(sum(mask)) = 0: sum(image_loss) = 0)
+    divisor = torch.sum(M)
+
+    if divisor == 0:
+        return 0
+    else:
+        return torch.sum(image_loss) / divisor
+
+def normalize_prediction_robust(target, mask):
+
+
+
+    ssum = torch.sum(mask, (-2, -1))
+    valid = ssum > 0
+    # print(valid.shape,"valid shape", target.shape, "target shape")
+
+    m = torch.zeros_like(ssum).to(torch.float32)
+
+    s = torch.ones_like(ssum).to(torch.float32)
+
+    # print(mask[valid].shape)
+    # print(target[valid].shape)
+    # print((mask[valid]*target[valid]).view(valid.sum(), -1).shape)
+    # print( torch.median((mask[valid] * target[valid]).view(valid.sum(), -1), dim=1).values)
+    m[valid] = torch.median((mask[valid] * target[valid]).view(valid.sum(), -1), dim=1).values
+    target = target - m.view(-1, 1, 1)
+
+    sq = torch.sum(mask * target.abs(), (1, 2))
+    s[valid] = torch.clamp((sq[valid] / ssum[valid]), min=1e-6)
+
+    return target / (s.view(-1, 1, 1))
+
+class TrimmedMaeLoss(nn.Module):
+    def __init__(self, alpha=0.5, scales=4, reduction="batch-based"):
+        super(TrimmedMaeLoss, self).__init__()
+        self.name = "TrimeedMaeLoss"
+        self.__alpha = alpha
+
+        self.__prediction_ssi = None
+
+    def forward(self, prediction, target, mask):
+        # print("trimmed mae loss", prediction.shape, target.shape, mask.shape)
+        prediction=prediction.squeeze(1)
+        target=target.squeeze(1)
+        mask=mask.squeeze(1)
+        
+        self.__prediction_ssi = normalize_prediction_robust(prediction, mask)
+        target_ = normalize_prediction_robust(target, mask)
+
+        total = trimmed_mae_loss(self.__prediction_ssi, target_, mask)
+        return total
+
+    def __get_prediction_ssi(self):
+        return self.__prediction_ssi
+
+    prediction_ssi = property(__get_prediction_ssi)
 
 # Main loss function used for ZoeDepth. Copy/paste from AdaBins repo (https://github.com/shariqfarooq123/AdaBins/blob/0952d91e9e762be310bb4cd055cbfe2448c0ce20/loss.py#L7)
 class SILogLoss(nn.Module):
@@ -132,6 +206,8 @@ class GradL1Loss(nn.Module):
         if not return_interpolated:
             return loss
         return loss, intr_input
+
+
 
 
 class OrdinalRegressionLoss(object):
@@ -262,6 +338,8 @@ def compute_scale_and_shift(prediction, target, mask):
     a_01 = torch.sum(mask * prediction, (1, 2))
     a_11 = torch.sum(mask, (1, 2))
 
+    # print("mask",mask, "prediction" ,prediction, "target" ,target)
+    # print(mask * prediction * target)
     # right hand side: b = [b_0, b_1]
     b_0 = torch.sum(mask * prediction * target, (1, 2))
     b_1 = torch.sum(mask * target, (1, 2))
@@ -269,8 +347,10 @@ def compute_scale_and_shift(prediction, target, mask):
     # solution: x = A^-1 . b = [[a_11, -a_01], [-a_10, a_00]] / (a_00 * a_11 - a_01 * a_10) . b
     x_0 = torch.zeros_like(b_0)
     x_1 = torch.zeros_like(b_1)
+ 
 
     det = a_00 * a_11 - a_01 * a_01
+    # print(f"a_00: {a_00}, a_01: {a_01}, a_11: {a_11}, b_0: {b_0}, b_1: {b_1},det: {det}")
     # A needs to be a positive definite matrix.
     valid = det > 0
 
@@ -298,52 +378,30 @@ class ScaleAndShiftInvariantLoss(nn.Module):
             target = target.unsqueeze(0)
             mask = mask.unsqueeze(0)
         assert prediction.shape == target.shape, f"Shape mismatch: Expected same shape but got {prediction.shape} and {target.shape}."
+
+
+        target_disparity = 1.0 / target
+        target_disparity[~mask]=0
+
+        assert torch.isnan(target_disparity[mask]).any()==False
+        assert torch.isinf(target_disparity[mask]).any() == False
+        assert torch.isnan(target_disparity*mask).any()==False
+           
+        scale, shift = compute_scale_and_shift(prediction, target_disparity, mask)
+        # assert torch.isnan(scale).any()==False
+    
+        scaled_disparity = scale.view(-1, 1, 1) * prediction + shift.view(-1, 1, 1)
         
-        scale, shift = compute_scale_and_shift(prediction, target, mask)
-        pred_arr= prediction[mask].cpu().detach().numpy()
-        target_arr= target[mask].cpu().detach().numpy()
-        # Convert the numpy arrays to torch tensors
-        pred_arr = np.array(pred_arr)
-        target_arr = np.array(target_arr)
+        original_mask=mask
+        assert torch.isnan(scaled_disparity[mask]).any()==False
 
-        # Perform linear regression
-        coefficients = np.polyfit(1/pred_arr, 1/target_arr, 1)
-
-        
-        s = coefficients[0]
-        t = coefficients[1]
-
-
-        # Print the values of s and t
-        print("s:", s)
-        print("t:", t)
-        print(1/(s/pred_arr+t), "fitted", target_arr)     
-
-
-        import matplotlib.pyplot as plt
-
-        # Plot the fitting figure
-        plt.scatter(1/pred_arr, 1/target_arr, label='Data')
-        # plt.scatter(pred_arr, target_arr, label='Data')
-        plt.plot(1/pred_arr, s/pred_arr+t , color='red', label='Fitted Line')
-
-        # Calculate the fitting error
-        fitting_error = np.abs(1/(s/pred_arr+t) - 1/target_arr)
-        average_fitting_error = np.mean(fitting_error)
-        print("Average Fitting Error:", average_fitting_error)
-        plt.ylabel('1/target')
-        plt.legend()
-
-        # Save the figure to a PNG file
-        plt.savefig('./fitting.png')
-
-        scaled_prediction = scale.view(-1, 1, 1) * prediction + shift.view(-1, 1, 1)
-
-        loss = nn.functional.l1_loss(scaled_prediction[mask], target[mask])
-
+        # loss = nn.functional.l1_loss(scaled_disparity[mask], target_disparity[mask])
+        loss=nn.functional.mse_loss(scaled_disparity[mask], target_disparity[mask])
+        assert not torch.isnan(loss), f"Nan loss, {scaled_disparity[mask].shape},{target_disparity[mask].shape}, {target_disparity[original_mask].shape}, {scaled_disparity[original_mask].shape}"
         if not return_interpolated:
             return loss
         return loss, intr_input
+
 
 
 

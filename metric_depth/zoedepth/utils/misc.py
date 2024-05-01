@@ -42,7 +42,7 @@ import torch.nn as nn
 import torch.utils.data.distributed
 from PIL import Image
 from torchvision.transforms import ToTensor
-from zoedepth.trainers.loss import compute_scale_and_shift
+from zoedepth.trainers.loss import compute_scale_and_shift, normalize_prediction_robust
 
 
 class RunningAverage:
@@ -157,6 +157,9 @@ def count_parameters(model, include_all=False):
     return sum(p.numel() for p in model.parameters() if p.requires_grad or include_all)
 
 
+
+
+
 def compute_errors(gt, pred):
     """Compute metrics for 'pred' compared to 'gt'
 
@@ -178,7 +181,7 @@ def compute_errors(gt, pred):
             'rmse_log': Root mean squared error on the log scale
             'silog': Scale invariant log error
     """
-    # print(gt.shape, pred.shape)
+
     thresh = np.maximum((gt / pred), (pred / gt))
     a1 = (thresh < 1.25).mean()
     a2 = (thresh < 1.25 ** 2).mean()
@@ -194,11 +197,18 @@ def compute_errors(gt, pred):
     rmse = (gt - pred) ** 2
     rmse = np.sqrt(rmse.mean())
 
+    if np.any(gt < 0) or np.any(pred < 0):
+        print("gt or pred contains negative values")
+        raise ValueError("Negative values in gt or pred")
     rmse_log = (np.log(gt) - np.log(pred)) ** 2
     rmse_log = np.sqrt(rmse_log.mean())
 
     err = np.log(pred) - np.log(gt)
+
+    assert np.isnan(err).sum() == 0, f"err contains NaN values {err}"
     silog = np.sqrt(np.mean(err ** 2) - np.mean(err) ** 2) * 100
+    assert np.mean(err ** 2) - np.mean(err) ** 2 >= 0, f"Negative value in silog {np.mean(err ** 2) - np.mean(err) ** 2}, {err}, {np.max(pred)}"
+
 
     log_10 = (np.abs(np.log10(gt) - np.log10(pred))).mean()
     return dict(a1=a1, a2=a2, a3=a3, a4=a4, a5=a5 ,abs_rel=abs_rel, rmse=rmse, log_10=log_10, rmse_log=rmse_log,
@@ -206,57 +216,41 @@ def compute_errors(gt, pred):
 
 
 def compute_ssi_metrics(gt, pred, interpolate=True, garg_crop=False, eigen_crop=False, dataset='nyu', min_depth_eval=0.1, max_depth_eval=10, **kwargs):
-    if 'config' in kwargs:
-        config = kwargs['config']
-        garg_crop = config.garg_crop
-        eigen_crop = config.eigen_crop
-        min_depth_eval = config.min_depth_eval
-        max_depth_eval = config.max_depth_eval
+    gt=gt.squeeze(1)
+    pred=pred.squeeze(1)
+    gt_disparity=torch.zeros_like(gt)
 
-    if gt.shape[-2:] != pred.shape[-2:] and interpolate:
-        pred = nn.functional.interpolate(
-            pred, gt.shape[-2:], mode='bilinear', align_corners=True)
 
-    pred = pred.squeeze(1).cpu().numpy()
-    # pred[pred < min_depth_eval] = min_depth_eval
-    # pred[pred > max_depth_eval] = max_depth_eval
-    pred[np.isinf(pred)] = max_depth_eval
-    pred[np.isnan(pred)] = min_depth_eval
+    valid_mask = torch.logical_and(gt>min_depth_eval, gt<max_depth_eval)
 
-    gt_depth = gt.squeeze(1).cpu().numpy()
-    valid_mask = np.logical_and(
-        gt_depth > min_depth_eval, gt_depth < max_depth_eval)
+    gt_disparity=1/gt
+    gt_disparity[~valid_mask]=0
 
-    if garg_crop or eigen_crop:
-        _, gt_height, gt_width = gt_depth.shape
-        eval_mask = np.zeros(valid_mask.shape)
 
-        if garg_crop:
-            eval_mask[int(0.40810811 * gt_height):int(0.99189189 * gt_height),
-                      int(0.03594771 * gt_width):int(0.96405229 * gt_width)] = 1
+    scale, shift = compute_scale_and_shift(pred, gt_disparity,valid_mask)
+    
+    # print(scale.shape, shift.shape, pred_disparity.shape, valid_mask.shape, gt_disparity.shape)
+    scaled_disparity=scale.view(-1, 1, 1) * pred + shift.view(-1, 1, 1)
+    
+    scaled_pred=1/scaled_disparity
+    scaled_pred=scaled_pred.cpu().numpy()
+    scaled_pred[np.isinf(scaled_pred)] = max_depth_eval
+    scaled_pred[scaled_pred < min_depth_eval] = min_depth_eval
 
-        elif eigen_crop:
-            # print("-"*10, " EIGEN CROP ", "-"*10)
-            if dataset == 'kitti':
-                eval_mask[int(0.3324324 * gt_height):int(0.91351351 * gt_height),
-                          int(0.0359477 * gt_width):int(0.96405229 * gt_width)] = 1
-            else:
-                # assert gt_depth.shape == (480, 640), "Error: Eigen crop is currently only valid for (480, 640) images"
-                eval_mask[45:471, 41:601] = 1
-    else:
-        eval_mask = np.ones(valid_mask.shape)
+    
+    gt=gt.cpu().numpy()
+    valid_mask=valid_mask.cpu().numpy()
 
-    assert eval_mask.sum()>0, "No eval mask"
-    assert  valid_mask.sum()>0, "No valid mask"    
-    valid_mask = np.logical_and(valid_mask, eval_mask)
-    assert  valid_mask.sum()>0, "No valid mask" 
-    # scale, shift=compute_scale_and_shift(pred,gt_depth,valid_mask)
-    scale, shift=compute_scale_and_shift(torch.tensor(pred),torch.tensor(gt_depth),torch.tensor(valid_mask))
-    scaled_prediction=scale.view(-1, 1, 1) * pred + shift.view(-1, 1, 1)
-    scaled_prediction=scaled_prediction.cpu().numpy()
-    scaled_prediction[scaled_prediction < min_depth_eval] = min_depth_eval
-    scaled_prediction[scaled_prediction > max_depth_eval] = max_depth_eval
-    return compute_errors(gt_depth[valid_mask], scaled_prediction[valid_mask])
+    if np.isnan(scaled_pred[valid_mask]).any():
+        raise ValueError("scaled_pred contains NaN values")
+
+    if np.isnan(gt[valid_mask]).any():
+        raise ValueError("gt contains NaN values")
+    
+    if gt[valid_mask].shape[0]==0:
+        raise ValueError("No valid mask")
+
+    return compute_errors(gt[valid_mask], scaled_pred[valid_mask])
     
 
 def compute_metrics(gt, pred, interpolate=True, garg_crop=False, eigen_crop=True, dataset='nyu', min_depth_eval=0.1, max_depth_eval=10, **kwargs):

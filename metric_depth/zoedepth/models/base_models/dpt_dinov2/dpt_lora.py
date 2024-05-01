@@ -55,7 +55,7 @@ class _LoRA_qkv(nn.Module):
 
 class DPT_DINOv2_Lora(nn.Module):
     def __init__(self, dinov2=None, encoder='vitl', features=256, use_bn=False, out_channels=[256, 512, 1024, 1024], use_clstoken=False, lora_layer=None):
-        rank=1024
+        rank=512
         print("LORA rank=",rank)
         super(DPT_DINOv2_Lora, self).__init__()
 
@@ -99,6 +99,7 @@ class DPT_DINOv2_Lora(nn.Module):
         self.pretrained=dinov2.pretrained
         
         self.depth_head = dinov2.depth_head
+        print(len([p for p in dinov2.pretrained.parameters() if p.requires_grad == True]))
         print(sum(p.numel() for p in dinov2.pretrained.parameters() if p.requires_grad == True)/1e6, sum(p.numel() for p in dinov2.depth_head.parameters())/1e6, "number of parameters")
 
     def reset_parameters(self):
