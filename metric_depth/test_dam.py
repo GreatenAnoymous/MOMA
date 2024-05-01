@@ -17,6 +17,7 @@ import create_pc
 from zoedepth.models.depth_model import DepthModel
 from zoedepth.models.builder import build_model
 from zoedepth.trainers.loss import ScaleAndShiftInvariantLoss, compute_scale_and_shift
+from zoedepth.utils.misc import compute_errors, compute_ssi_metrics
 
 # class CameraIntrinsic:
 #     def __init__(self,fx=595.429443359375,fy=595.7514038085938,ppx=321.8606872558594,ppy=239.07879638671875) -> None:
@@ -90,6 +91,58 @@ class DAM(object):
         pass
     
     
+    
+    def testDAM(self, image, depth=None, DEVICE="cuda"):
+        
+        from zoedepth.models.base_models.depth_anything_lora import DepthAnythingLoraCore
+    
+        image=torch.tensor(np.array(image))
+        image=image.permute(2,0,1)
+        image=image.unsqueeze(0).float()
+        image=image/255.0
+        b,c,w,h=image.shape
+        depth_anything= DepthAnythingLoraCore.build()
+
+        depth_anything = depth_anything
+        output=depth_anything(image, denorm=False, return_rel_depth=True)
+  
+        depth_numpy=F.interpolate(output.unsqueeze(0), size=(w, h), mode='bilinear', align_corners=False)
+        
+        depth_numpy=depth_numpy.to(torch.float32)
+    
+        # print(depth)
+        if depth is not None:
+            # mask = np.logical_and((depth> 0),(depth<2))
+            depth=torch.tensor(depth, dtype=torch.float32).unsqueeze(0).unsqueeze(0)
+            print(depth_numpy.shape,torch.tensor(depth).unsqueeze(0).unsqueeze(0).shape )
+            loss=ScaleAndShiftInvariantLoss()
+            
+            res=compute_ssi_metrics( depth, depth_numpy)
+            # disparity=1/depth
+            # disparity[depth==0]=0
+            # # 
+            # print("???",depth_numpy.shape, torch.tensor(disparity).unsqueeze(0).shape,torch.tensor(mask).unsqueeze(0).shape)
+            # scale,shift=compute_scale_and_shift(depth_numpy, torch.tensor(disparity).unsqueeze(0),torch.tensor(mask).unsqueeze(0))
+            # print(scale.shape)
+            # scaled_disparity=  scale.view(-1, 1, 1) * depth_numpy + shift.view(-1, 1, 1)
+            # scaled_depth=1/scaled_disparity
+            # scaled_depth[scaled_depth<0]=1e-3
+            # scaled_depth[scaled_depth>2]=2
+            # scaled_depth=scaled_depth.numpy()
+            # scaled_depth=scaled_depth.squeeze(0)
+            # print(scaled_depth.shape, depth.shape, mask.shape)
+            # res=compute_errors(scaled_depth[mask], depth[mask])
+            
+            print(res)
+            # scaled_prediction = scale.view(-1, 1, 1) * torch.tensor(depth_numpy).unsqueeze(0), + shift.view(-1, 1, 1)
+            # print(scaled_prediction)
+            
+            # err=loss(depth_numpy.unsqueeze(0).unsqueeze(0), torch.tensor(depth).unsqueeze(0).unsqueeze(0),torch.tensor(mask).unsqueeze(0).unsqueeze(0))
+            # print("the loss function is",err)
+        
+        
+        
+    
     def predictDepth(self, image, depth=None, DEVICE="cuda"):
         
         from zoedepth.models.model_io import load_wts
@@ -119,8 +172,8 @@ class DAM(object):
             # scaled_prediction = scale.view(-1, 1, 1) * torch.tensor(depth_numpy).unsqueeze(0), + shift.view(-1, 1, 1)
             # print(scaled_prediction)
             
-            err=loss(torch.tensor(depth_numpy).unsqueeze(0).unsqueeze(0), torch.tensor(depth).unsqueeze(0).unsqueeze(0),torch.tensor(mask).unsqueeze(0).unsqueeze(0))
-            print(err)
+            # err=loss(torch.tensor(depth_numpy).unsqueeze(0).unsqueeze(0), torch.tensor(depth).unsqueeze(0).unsqueeze(0),torch.tensor(mask).unsqueeze(0).unsqueeze(0))
+            # print(err)
         
         
         from zoedepth.utils.misc import colorize
@@ -190,13 +243,14 @@ dam =DAM()
 # depth=exr_loader("/mnt/ssd_990/teng/BinPicking/cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000000-transparent-depth-img.exr", ndim = 1, ndim_representation = ['R'])
 # image = cv2.imread("/mnt/ssd_990/teng/BinPicking/cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000001-transparent-rgb-img.jpg")
 from PIL import Image
-# image=cv2.imread("/mnt/ssd_990/teng/BinPicking/DPT_transparent_objects/metric_depth/data/nyu/transcg/scene83/12/rgb1.png")
-# depth =np.array(Image.open("/mnt/ssd_990/teng/BinPicking/DPT_transparent_objects/metric_depth/data/nyu/transcg/scene83/12/depth1-gt.png"))
+image=cv2.imread("./data/nyu/transcg/scene1/0/rgb1.png")
+depth =np.array(Image.open("./data/nyu/transcg/scene1/0/depth1-gt.png"))
 
-image= cv2.imread("../../object_dataset/object_dataset_14/17_color.png")
-depth=np.array(Image.open("../../object_dataset/object_dataset_14/17_gt_depth.png"))
+# image= cv2.imread("../../object_dataset/object_dataset_14/17_color.png")
+# depth=np.array(Image.open("../../object_dataset/object_dataset_14/17_gt_depth.png"))
 
-depth = dam.predictDepth(image, depth/1000)
+# depth = dam.predictDepth(image, depth/1000)
+depth=dam.testDAM(image, depth/1000)
 # dam.dump_to_pointcloud(image)
 
 # generate_fake_depth("/common/home/gt286/BinPicking/objet_dataset/object_dataset_6/", "./fakedepth/")

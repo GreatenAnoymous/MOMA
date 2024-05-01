@@ -55,7 +55,8 @@ class RelativeTrainer(BaseTrainer):
         self.ssi_loss = ScaleAndShiftInvariantLoss()
         self.scaler = amp.GradScaler(enabled=self.config.use_amp)
         self.grad_loss=GradL1Loss()
-
+        self.epoch=0
+        self.should_log=False
     def train_on_batch(self, batch, train_step):
         """
         Expects a batch of images and depth as input
@@ -131,6 +132,7 @@ class RelativeTrainer(BaseTrainer):
 
     @torch.no_grad()
     def crop_aware_infer(self, x):
+        print("Cropping the image to avoid black border")
         # if we are not avoiding the black border, we can just use the normal inference
         if not self.config.get("avoid_boundary", False):
             return self.eval_infer(x)
@@ -192,7 +194,7 @@ class RelativeTrainer(BaseTrainer):
             depths_gt[torch.logical_not(mask)] = -99
             self.log_images(rgb={"Input": images[0]}, depth={"GT": depths_gt[0], "PredictedMono": pred_depths[0]}, prefix="Test",
                             min_depth=DATASETS_CONFIG[dataset]['min_depth'], max_depth=DATASETS_CONFIG[dataset]['max_depth'])
-
+        print(metrics)
         return metrics, losses
 
 
@@ -229,7 +231,8 @@ def main_worker(gpu,config):
         test_loader = DepthDataLoader(config, "online_eval").data
 
         trainer = RelativeTrainer(config, model, train_loader, test_loader=test_loader, device=config.gpu)
-        trainer.train()
+        # trainer.train()
+        trainer.validate()
         
     finally:
         import wandb

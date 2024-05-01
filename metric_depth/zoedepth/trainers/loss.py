@@ -392,11 +392,11 @@ class ScaleAndShiftInvariantLoss(nn.Module):
     
         scaled_disparity = scale.view(-1, 1, 1) * prediction + shift.view(-1, 1, 1)
         
-        original_mask=mask
+  
         assert torch.isnan(scaled_disparity[mask]).any()==False
 
-        # loss = nn.functional.l1_loss(scaled_disparity[mask], target_disparity[mask])
-        loss=nn.functional.mse_loss(scaled_disparity[mask], target_disparity[mask])
+        loss = nn.functional.l1_loss(scaled_disparity[mask], target_disparity[mask])
+        # loss=nn.functional.mse_loss(scaled_disparity[mask], target_disparity[mask])
         assert not torch.isnan(loss), f"Nan loss, {scaled_disparity[mask].shape},{target_disparity[mask].shape}, {target_disparity[original_mask].shape}, {scaled_disparity[original_mask].shape}"
         if not return_interpolated:
             return loss
