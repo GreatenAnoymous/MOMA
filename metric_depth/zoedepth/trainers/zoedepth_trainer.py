@@ -155,7 +155,7 @@ class Trainer(BaseTrainer):
             if not batch['has_valid_depth']:
                 # print("no valid depth")
                 return None, None
-
+        
         depths_gt = depths_gt.squeeze().unsqueeze(0).unsqueeze(0)
         mask = mask.squeeze().unsqueeze(0).unsqueeze(0)
         if dataset == 'nyu':
@@ -167,7 +167,7 @@ class Trainer(BaseTrainer):
         with amp.autocast(enabled=self.config.use_amp):
             l_depth = self.silog_loss(
                 pred_depths, depths_gt, mask=mask.to(torch.bool), interpolate=True)
-        
+    
         metrics = compute_metrics(depths_gt, pred_depths, **self.config)
         # print(metrics)
         losses = {f"{self.silog_loss.name}": l_depth.item()}

@@ -95,13 +95,14 @@ class DAM(object):
     def testDAM(self, image, depth=None, DEVICE="cuda"):
         
         from zoedepth.models.base_models.depth_anything_lora import DepthAnythingLoraCore
+        from zoedepth.models.base_models.depth_anything import DepthAnythingCore
     
         image=torch.tensor(np.array(image))
         image=image.permute(2,0,1)
         image=image.unsqueeze(0).float()
         image=image/255.0
         b,c,w,h=image.shape
-        depth_anything= DepthAnythingLoraCore.build()
+        depth_anything= DepthAnythingCore.build(img_size=[518,518])
 
         depth_anything = depth_anything
         output=depth_anything(image, denorm=False, return_rel_depth=True)
@@ -148,7 +149,7 @@ class DAM(object):
         from zoedepth.models.model_io import load_wts
     
         # checkpoint="./checkpoints/depth_anything_vitl14.pth"
-        checkpoint="./depth_anything_finetune/ZoeDepthv1_24-Apr_15-33-0b38ad832d3c_best.pt"
+        checkpoint="./depth_anything_finetune/mydata.pt"
         
         config=get_config("zoedepth", "train", "nyu")
         depth_anything = build_model(config)
@@ -188,7 +189,7 @@ class DAM(object):
     def dump_to_pointcloud(self, image,  depth_scale=0.3, clip_distance_max=1, intrinsics=CameraIntrinsic()):
         DEVICE="cuda"
         from zoedepth.models.model_io import load_wts
-        checkpoint="./depth_anything_finetune/transcg_dam.pt"
+        checkpoint="./depth_anything_finetune/mydata.pt"
         
         config=get_config("zoedepth", "train", "nyu")
         depth_anything = build_model(config)
@@ -243,14 +244,15 @@ dam =DAM()
 # depth=exr_loader("/mnt/ssd_990/teng/BinPicking/cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000000-transparent-depth-img.exr", ndim = 1, ndim_representation = ['R'])
 # image = cv2.imread("/mnt/ssd_990/teng/BinPicking/cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000001-transparent-rgb-img.jpg")
 from PIL import Image
-image=cv2.imread("./data/nyu/transcg/scene1/0/rgb1.png")
-depth =np.array(Image.open("./data/nyu/transcg/scene1/0/depth1-gt.png"))
+# image=cv2.imread("./data/nyu/transcg/scene7/1/rgb1.png")
+# depth =np.array(Image.open("./data/nyu/transcg/scene7/1/depth1-gt.png"))
 
-# image= cv2.imread("../../object_dataset/object_dataset_14/17_color.png")
-# depth=np.array(Image.open("../../object_dataset/object_dataset_14/17_gt_depth.png"))
+image=cv2.imread("./data/nyu/arcl/001/1_color.png")
+depth =np.array(Image.open("./data/nyu/arcl/001/1_gt_depth.png"))
 
-# depth = dam.predictDepth(image, depth/1000)
-depth=dam.testDAM(image, depth/1000)
+
+depth = dam.predictDepth(image, depth/1000)
+# depth=dam.testDAM(image, depth/1000)
 # dam.dump_to_pointcloud(image)
 
 # generate_fake_depth("/common/home/gt286/BinPicking/objet_dataset/object_dataset_6/", "./fakedepth/")

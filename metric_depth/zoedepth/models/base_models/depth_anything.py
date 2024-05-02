@@ -214,7 +214,7 @@ class DepthAnythingCore(nn.Module):
         # self.layer_names = ['out_conv','l4_rn', 'r4', 'r3', 'r2', 'r1']
         self.layer_names = layer_names
 
-        # self.set_trainable(trainable)
+        self.set_trainable(trainable)
         self.set_fetch_features(fetch_features)
 
         self.prep = PrepForMidas(keep_aspect_ratio=keep_aspect_ratio,
@@ -364,6 +364,14 @@ class DepthAnythingCore(nn.Module):
             assert isinstance(config['img_size'], list) and len(
                 config['img_size']) == 2, "img_size should be a list of H,W"
         return config
+    
+    def  get_lr_params(self, lr):
+        lr_params = []
+        for param in self.core.parameters():
+            if param.requires_grad:
+                lr_params.append({'params': param, 'lr': lr})
+    
+        return lr_params
 
 
 nchannels2models = {

@@ -134,7 +134,7 @@ if __name__ == '__main__':
     else:
         shared_dict = None
     config.shared_dict = shared_dict
-    config.use_lora = True
+    config.use_lora = False
     config.batch_size = config.bs
     config.mode = 'train'
     config.multigpu=False

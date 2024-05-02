@@ -18,6 +18,7 @@ from PIL import Image
 from zoedepth.data.preprocess import get_black_border
 from zoedepth.utils.config import DATASETS_CONFIG
 from zoedepth.models.base_models.depth_anything_lora import DepthAnythingLoraCore
+from zoedepth.models.base_models.depth_anything import DepthAnythingCore
 from zoedepth.trainers.loss import GradL1Loss
 
 def load_ckpt(config, model, checkpoint_dir="./checkpoints", ckpt_type="best"):
@@ -82,6 +83,7 @@ class RelativeTrainer(BaseTrainer):
             pred_depths = nn.functional.interpolate(pred_depths, size=(h, w), mode='bilinear', align_corners=False)
 
             loss=self.config.w_si * self.ssi_loss(pred_depths, depths_gt, mask=mask)
+            print("SSI Loss",loss)
             losses[self.ssi_loss.name] = loss
 
             if self.config.w_grad > 0:
@@ -99,16 +101,16 @@ class RelativeTrainer(BaseTrainer):
                 self.model.parameters(), self.config.clip_grad)
 
         self.scaler.step(self.optimizer)
-        # if self.should_log and (self.step % int(self.config.log_images_every * self.iters_per_epoch)) == 0:
-        #     # -99 is treated as invalid depth in the log_images function and is colored grey.
-        #     depths_gt[torch.logical_not(mask)] = -99
+        if self.should_log and (self.step % int(self.config.log_images_every * self.iters_per_epoch)) == 0:
+            # -99 is treated as invalid depth in the log_images function and is colored grey.
+            depths_gt[torch.logical_not(mask)] = -99
 
-        #     self.log_images(rgb={"Input": images[0, ...]}, depth={"GT": depths_gt[0], "PredictedMono": pred_depths[0]}, prefix="Train",
-        #                     min_depth=DATASETS_CONFIG[dataset]['min_depth'], max_depth=DATASETS_CONFIG[dataset]['max_depth'])
+            self.log_images(rgb={"Input": images[0, ...]}, depth={"GT": depths_gt[0], "PredictedMono": 1/pred_depths[0]}, prefix="Train",
+                            min_depth=DATASETS_CONFIG[dataset]['min_depth'], max_depth=DATASETS_CONFIG[dataset]['max_depth'])
 
-        #     if self.config.get("log_rel", False):
-        #         self.log_images(
-        #             scalar_field={"RelPred": output["relative_depth"][0]}, prefix="TrainRel")
+            if self.config.get("log_rel", False):
+                self.log_images(
+                    scalar_field={"RelPred": pred_depths}, prefix="TrainRel")
         self.scaler.update()
         self.optimizer.zero_grad()
 
@@ -178,19 +180,31 @@ class RelativeTrainer(BaseTrainer):
         # else:
         pred_depths = self.eval_infer(images)
         pred_depths = pred_depths.squeeze().unsqueeze(0).unsqueeze(0)
+        # Save images as PNG
+        # for i in range(images.size(0)):
+        #     image = images[i].squeeze().cpu().numpy()
+        #     image = (image * 255).astype(np.uint8)
         
+        # out_image = images.squeeze().permute(1, 2, 0)
+        # out_image=(out_image * 255).cpu().numpy().astype(np.uint8)
+        # out_image = Image.fromarray(out_image)
+        # out_image.save("output.png")
+        
+    
         with amp.autocast(enabled=self.config.use_amp):
             l_depth = self.ssi_loss(
                 pred_depths, depths_gt, mask=mask.to(torch.bool))
+
+        # print(pred_depths.shape, pred_depths)
 
         metrics = compute_ssi_metrics(depths_gt, pred_depths, **self.config)
         losses = {f"{self.ssi_loss.name}": l_depth.item()}
 
         if val_step == 1 and self.should_log:
             depths_gt[torch.logical_not(mask)] = -99
-            self.log_images(rgb={"Input": images[0]}, depth={"GT": depths_gt[0], "PredictedMono": pred_depths[0]}, prefix="Test",
+            self.log_images(rgb={"Input": images[0]}, depth={"GT": depths_gt[0], "PredictedMono": 1/pred_depths[0]}, prefix="Test",
                             min_depth=DATASETS_CONFIG[dataset]['min_depth'], max_depth=DATASETS_CONFIG[dataset]['max_depth'])
-        print(metrics)
+        # exit(0)
         return metrics, losses
 
 
@@ -215,7 +229,7 @@ def main_worker(gpu,config):
         seed = config.seed if 'seed' in config and config.seed else 43
         fix_random_seed(seed)
         config.gpu=gpu
-        model=DepthAnythingLoraCore.build(**config)
+        model=DepthAnythingCore.build(**config)
         model=parallelize(config,model)
         print(len([p for p in model.parameters() if p.requires_grad]), "Total Learnable Parameters")
         
@@ -227,8 +241,8 @@ def main_worker(gpu,config):
         test_loader = DepthDataLoader(config, "online_eval").data
 
         trainer = RelativeTrainer(config, model, train_loader, test_loader=test_loader, device=config.gpu)
-        # trainer.train()
-        trainer.validate()
+        trainer.train()
+        # trainer.validate()
         
     finally:
         import wandb

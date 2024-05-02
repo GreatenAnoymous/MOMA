@@ -46,6 +46,7 @@ class DepthAnythingLoraCore(DepthAnythingCore):
             img_size (int, tuple, optional): Input resolution. Defaults to 384.
         """
         super().__init__(midas, trainable, fetch_features, layer_names, freeze_bn, keep_aspect_ratio, img_size, **kwargs)
+        
 
     @staticmethod
     def build(midas_model_type="dinov2_large", train_midas=False, use_pretrained_midas=True, fetch_features=False, freeze_bn=True, force_keep_ar=False, force_reload=False, **kwargs):
@@ -68,13 +69,7 @@ class DepthAnythingLoraCore(DepthAnythingCore):
         print("Using Lora for fine-tuning Depth-Anything model.")
         return depth_anything_core
     
-    def  get_lr_params(self, lr):
-        lr_params = []
-        for param in self.core.parameters():
-            if param.requires_grad:
-                lr_params.append({'params': param, 'lr': lr})
     
-        return lr_params
 
 
 nchannels2models = {
