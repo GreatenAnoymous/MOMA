@@ -97,7 +97,7 @@ DATASETS_CONFIG = {
         "dataset": "nyu",
         "avoid_boundary": False,
         "min_depth": 1e-3,   # originally 0.1
-        "max_depth": 10,
+        "max_depth": 2,
         "data_path": os.path.join(HOME_DIR, "nyu"),
         "gt_path": os.path.join(HOME_DIR, "nyu"),
         "filenames_file": "./train_test_inputs/transcg_train.txt",
@@ -107,11 +107,11 @@ DATASETS_CONFIG = {
         "gt_path_eval": os.path.join(HOME_DIR, "nyu"),
         "filenames_file_eval": "./train_test_inputs/transcg_test.txt",
         "min_depth_eval": 1e-3,
-        "max_depth_eval": 10,
+        "max_depth_eval": 2,
         "min_depth_diff": -10,
         "max_depth_diff": 10,
 
-        "do_random_rotate": True,
+        "do_random_rotate": False,
         "degree": 1.0,
         "do_kb_crop": False,
         "garg_crop": False,

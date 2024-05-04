@@ -99,10 +99,12 @@ class TrimmedMaeLoss(nn.Module):
         # print("trimmed mae loss", prediction.shape, target.shape, mask.shape)
         prediction=prediction.squeeze(1)
         target=target.squeeze(1)
+        target[target==0]=1e-3
+        target_disparity = 1.0 / target
         mask=mask.squeeze(1)
         
         self.__prediction_ssi = normalize_prediction_robust(prediction, mask)
-        target_ = normalize_prediction_robust(target, mask)
+        target_ = normalize_prediction_robust(target_disparity, mask)
 
         total = trimmed_mae_loss(self.__prediction_ssi, target_, mask)
         return total
@@ -358,20 +360,14 @@ def compute_scale_and_shift(prediction, target, mask):
     x_1[valid] = (-a_01[valid] * b_0[valid] + a_00[valid] * b_1[valid]) / det[valid]
 
     return x_0, x_1
+
 class ScaleAndShiftInvariantLoss(nn.Module):
     def __init__(self):
         super().__init__()
         self.name = "SSILoss"
 
     def forward(self, prediction, target, mask, interpolate=True, return_interpolated=False):
-        
-        if prediction.shape[-1] != target.shape[-1] and interpolate:
-            prediction = nn.functional.interpolate(prediction, target.shape[-2:], mode='bilinear', align_corners=True)
-            intr_input = prediction
-        else:
-            intr_input = prediction
-
-
+    
         prediction, target, mask = prediction.squeeze(), target.squeeze(), mask.squeeze()
         if len(prediction.shape) == 2:
             prediction = prediction.unsqueeze(0)
@@ -379,28 +375,21 @@ class ScaleAndShiftInvariantLoss(nn.Module):
             mask = mask.unsqueeze(0)
         assert prediction.shape == target.shape, f"Shape mismatch: Expected same shape but got {prediction.shape} and {target.shape}."
 
-
+        target[target==0]=1e-3
         target_disparity = 1.0 / target
         target_disparity[~mask]=0
 
         assert torch.isnan(target_disparity[mask]).any()==False
         assert torch.isinf(target_disparity[mask]).any() == False
         assert torch.isnan(target_disparity*mask).any()==False
-           
         scale, shift = compute_scale_and_shift(prediction, target_disparity, mask)
-        # assert torch.isnan(scale).any()==False
-    
+        assert torch.isnan(scale).any()==False
         scaled_disparity = scale.view(-1, 1, 1) * prediction + shift.view(-1, 1, 1)
-        
-        original_mask=mask
         assert torch.isnan(scaled_disparity[mask]).any()==False
-
-        # loss = nn.functional.l1_loss(scaled_disparity[mask], target_disparity[mask])
-        loss=nn.functional.mse_loss(scaled_disparity[mask], target_disparity[mask])
-        assert not torch.isnan(loss), f"Nan loss, {scaled_disparity[mask].shape},{target_disparity[mask].shape}, {target_disparity[original_mask].shape}, {scaled_disparity[original_mask].shape}"
-        if not return_interpolated:
-            return loss
-        return loss, intr_input
+        loss = nn.functional.l1_loss(scaled_disparity[mask], target_disparity[mask])
+        assert not torch.isnan(loss), f"Nan loss, {scaled_disparity[mask].shape},{target_disparity[mask].shape}"
+        return loss
+    
 
 
 

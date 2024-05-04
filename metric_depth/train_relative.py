@@ -1,4 +1,4 @@
-from zoedepth.utils.misc import count_parameters, parallelize, compute_metrics, compute_ssi_metrics
+from zoedepth.utils.misc import count_parameters, parallelize, compute_metrics, compute_ssi_metrics, compute_align
 from zoedepth.trainers.base_trainer import BaseTrainer
 from zoedepth.trainers.loss import ScaleAndShiftInvariantLoss, TrimmedMaeLoss
 from zoedepth.data.data_mono import DepthDataLoader
@@ -18,6 +18,7 @@ from PIL import Image
 from zoedepth.data.preprocess import get_black_border
 from zoedepth.utils.config import DATASETS_CONFIG
 from zoedepth.models.base_models.depth_anything_lora import DepthAnythingLoraCore
+from zoedepth.models.base_models.depth_anything import DepthAnythingCore
 from zoedepth.trainers.loss import GradL1Loss
 
 def load_ckpt(config, model, checkpoint_dir="./checkpoints", ckpt_type="best"):
@@ -51,9 +52,11 @@ class RelativeTrainer(BaseTrainer):
         self.device = device
         self.model=model.to(device)
         self.ssi_loss = ScaleAndShiftInvariantLoss()
+        # self.ssi_loss = TrimmedMaeLoss()
         self.scaler = amp.GradScaler(enabled=self.config.use_amp)
         self.grad_loss=GradL1Loss()
-
+        self.epoch=0
+        self.should_log=False
     def train_on_batch(self, batch, train_step):
         """
         Expects a batch of images and depth as input
@@ -74,22 +77,18 @@ class RelativeTrainer(BaseTrainer):
         losses = {}
 
         with amp.autocast(enabled=self.config.use_amp):
-        
-        
             pred_depths= self.model(images, denorm=False, return_rel_depth=True)
             pred_depths=pred_depths.unsqueeze(1)
             pred_depths = nn.functional.interpolate(pred_depths, size=(h, w), mode='bilinear', align_corners=False)
-
             loss=self.config.w_si * self.ssi_loss(pred_depths, depths_gt, mask=mask)
             losses[self.ssi_loss.name] = loss
-
             if self.config.w_grad > 0:
                 l_grad = self.grad_loss(pred_depths, depths_gt, mask=mask)
                 loss = loss + self.config.w_grad * l_grad
                 losses[self.grad_loss.name] = l_grad
             else:
                 l_grad = torch.Tensor([0])
-
+        
         self.scaler.scale(loss).backward()
 
         if self.config.clip_grad > 0:
@@ -98,16 +97,16 @@ class RelativeTrainer(BaseTrainer):
                 self.model.parameters(), self.config.clip_grad)
 
         self.scaler.step(self.optimizer)
-        # if self.should_log and (self.step % int(self.config.log_images_every * self.iters_per_epoch)) == 0:
-        #     # -99 is treated as invalid depth in the log_images function and is colored grey.
-        #     depths_gt[torch.logical_not(mask)] = -99
+        if self.should_log and (self.step % int(self.config.log_images_every * self.iters_per_epoch)) == 0:
+            # -99 is treated as invalid depth in the log_images function and is colored grey.
+            depths_gt[torch.logical_not(mask)] = -99
+            scaled_depth= compute_align(depths_gt[0], pred_depths[0])
+            self.log_images(rgb={"Input": images[0, ...]}, depth={"GT": depths_gt[0], "PredictedMono": scaled_depth[0]}, prefix="Train",
+                            min_depth=DATASETS_CONFIG[dataset]['min_depth'], max_depth=DATASETS_CONFIG[dataset]['max_depth'])
 
-        #     self.log_images(rgb={"Input": images[0, ...]}, depth={"GT": depths_gt[0], "PredictedMono": pred_depths[0]}, prefix="Train",
-        #                     min_depth=DATASETS_CONFIG[dataset]['min_depth'], max_depth=DATASETS_CONFIG[dataset]['max_depth'])
-
-        #     if self.config.get("log_rel", False):
-        #         self.log_images(
-        #             scalar_field={"RelPred": output["relative_depth"][0]}, prefix="TrainRel")
+            if self.config.get("log_rel", False):
+                self.log_images(
+                    scalar_field={"RelPred": pred_depths}, prefix="TrainRel")
         self.scaler.update()
         self.optimizer.zero_grad()
 
@@ -127,6 +126,7 @@ class RelativeTrainer(BaseTrainer):
 
     @torch.no_grad()
     def crop_aware_infer(self, x):
+        print("Cropping the image to avoid black border")
         # if we are not avoiding the black border, we can just use the normal inference
         if not self.config.get("avoid_boundary", False):
             return self.eval_infer(x)
@@ -176,19 +176,25 @@ class RelativeTrainer(BaseTrainer):
         # else:
         pred_depths = self.eval_infer(images)
         pred_depths = pred_depths.squeeze().unsqueeze(0).unsqueeze(0)
-        
+        # Save images as PNG
+
         with amp.autocast(enabled=self.config.use_amp):
             l_depth = self.ssi_loss(
                 pred_depths, depths_gt, mask=mask.to(torch.bool))
+
+        # print(pred_depths.shape, pred_depths)
 
         metrics = compute_ssi_metrics(depths_gt, pred_depths, **self.config)
         losses = {f"{self.ssi_loss.name}": l_depth.item()}
 
         if val_step == 1 and self.should_log:
             depths_gt[torch.logical_not(mask)] = -99
-            self.log_images(rgb={"Input": images[0]}, depth={"GT": depths_gt[0], "PredictedMono": pred_depths[0]}, prefix="Test",
+            scaled_depth= compute_align(depths_gt[0], pred_depths[0])
+            # pred_depths_resized = nn.functional.interpolate(scaled_depth.unsqueeze(0), size=(392, 518), mode='bilinear', align_corners=False)
+            
+            # print("predicted depth shape", pred_depths_resized.shape, pred_depths_resized)
+            self.log_images(rgb={"Input": images[0]}, depth={"GT": depths_gt[0], "PredictedMono": scaled_depth[0]}, prefix="Test",
                             min_depth=DATASETS_CONFIG[dataset]['min_depth'], max_depth=DATASETS_CONFIG[dataset]['max_depth'])
-
         return metrics, losses
 
 
@@ -213,7 +219,7 @@ def main_worker(gpu,config):
         seed = config.seed if 'seed' in config and config.seed else 43
         fix_random_seed(seed)
         config.gpu=gpu
-        model=DepthAnythingLoraCore.build(**config)
+        model=DepthAnythingCore.build(**config)
         model=parallelize(config,model)
         print(len([p for p in model.parameters() if p.requires_grad]), "Total Learnable Parameters")
         
@@ -226,6 +232,7 @@ def main_worker(gpu,config):
 
         trainer = RelativeTrainer(config, model, train_loader, test_loader=test_loader, device=config.gpu)
         trainer.train()
+        # trainer.validate()
         
     finally:
         import wandb

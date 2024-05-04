@@ -215,18 +215,43 @@ def compute_errors(gt, pred):
                 silog=silog, sq_rel=sq_rel)
 
 
+def compute_align(gt, pred, min_depth_eval=0.1, max_depth_eval=10, **kwargs):
+    gt=gt.squeeze(1)
+    pred=pred.squeeze(1)
+    valid_mask = torch.logical_and(gt>min_depth_eval, gt<max_depth_eval)
+
+    gt_disparity=1/gt
+    gt_disparity[gt==0]=0
+    scale, shift = compute_scale_and_shift(pred, gt_disparity,valid_mask)
+    scaled_disparity=scale.view(-1, 1, 1) * pred + shift.view(-1, 1, 1)
+    
+    scaled_pred=1/scaled_disparity
+    scaled_pred[scaled_pred>max_depth_eval] = max_depth_eval
+    scaled_pred[scaled_pred < min_depth_eval] = min_depth_eval
+    return scaled_pred
+
+
+
 def compute_ssi_metrics(gt, pred, interpolate=True, garg_crop=False, eigen_crop=False, dataset='nyu', min_depth_eval=0.1, max_depth_eval=10, **kwargs):
     gt=gt.squeeze(1)
     pred=pred.squeeze(1)
 
+    # print(gt.shape, pred.shape)
+    
+    import matplotlib.pyplot as plt
 
+    # Save ground truth and predicted depth maps as gray images
+    
+    # plt.imsave('pred.png', pred.cpu().numpy().squeeze(), cmap='gray')
     valid_mask = torch.logical_and(gt>min_depth_eval, gt<max_depth_eval)
 
     gt_disparity=1/gt
-    gt_disparity[~valid_mask]=0
+    gt_disparity[gt==0]=0
+    # plt.imsave('gt.png', gt_disparity.cpu().numpy().squeeze(), cmap='gray')
 
 
     scale, shift = compute_scale_and_shift(pred, gt_disparity,valid_mask)
+    
     
     # print(scale.shape, shift.shape, pred_disparity.shape, valid_mask.shape, gt_disparity.shape)
     scaled_disparity=scale.view(-1, 1, 1) * pred + shift.view(-1, 1, 1)

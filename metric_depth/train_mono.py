@@ -93,7 +93,6 @@ def main_worker(gpu, ngpus_per_node, config):
             
         model = load_ckpt(config, model)
         model = parallelize(config, model)
-  
         total_params = f"{round(count_parameters(model)/1e6,2)}M"
         config.total_params = total_params
         print(f"Total parameters : {total_params}", config.gpu)
@@ -134,7 +133,7 @@ if __name__ == '__main__':
     else:
         shared_dict = None
     config.shared_dict = shared_dict
-    config.use_lora = True
+    config.use_lora = False
     config.batch_size = config.bs
     config.mode = 'train'
     config.multigpu=False

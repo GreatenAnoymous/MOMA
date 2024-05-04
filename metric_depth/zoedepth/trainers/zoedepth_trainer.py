@@ -155,7 +155,7 @@ class Trainer(BaseTrainer):
             if not batch['has_valid_depth']:
                 # print("no valid depth")
                 return None, None
-
+        
         depths_gt = depths_gt.squeeze().unsqueeze(0).unsqueeze(0)
         mask = mask.squeeze().unsqueeze(0).unsqueeze(0)
         if dataset == 'nyu':
@@ -167,14 +167,15 @@ class Trainer(BaseTrainer):
         with amp.autocast(enabled=self.config.use_amp):
             l_depth = self.silog_loss(
                 pred_depths, depths_gt, mask=mask.to(torch.bool), interpolate=True)
-        
+    
         metrics = compute_metrics(depths_gt, pred_depths, **self.config)
-        # print(metrics)
+    
         losses = {f"{self.silog_loss.name}": l_depth.item()}
-        # print(losses)
+    
 
         if val_step == 1 and self.should_log:
             depths_gt[torch.logical_not(mask)] = -99
+            print("predicted depth shape", pred_depths[0].shape, pred_depths[0].max(), pred_depths[0].min(), pred_depths[0])
             self.log_images(rgb={"Input": images[0]}, depth={"GT": depths_gt[0], "PredictedMono": pred_depths[0]}, prefix="Test",
                             min_depth=DATASETS_CONFIG[dataset]['min_depth'], max_depth=DATASETS_CONFIG[dataset]['max_depth'])
 

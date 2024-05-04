@@ -137,7 +137,6 @@ class DepthDataLoader(object):
             transform = preprocessing_transforms(mode, size=img_size)
 
         if mode == 'train':
-
             Dataset = DataLoadPreprocess
             self.training_samples = Dataset(
                 config, mode, transform=transform, device=device)
@@ -366,11 +365,12 @@ class DataLoadPreprocess(Dataset):
                 depth_gt = depth_gt / 256.0
 
             if self.config.aug and (self.config.random_crop):
+                print("use augmentation!")
                 image, depth_gt = self.random_crop(
                     image, depth_gt, self.config.input_height, self.config.input_width)
             
             if self.config.aug and self.config.random_translate:
-                # print("Random Translation!")
+                print("Random Translation!")
                 image, depth_gt = self.random_translate(image, depth_gt, self.config.max_translation)
 
             image, depth_gt = self.train_preprocess(image, depth_gt)
