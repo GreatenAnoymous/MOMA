@@ -10,21 +10,14 @@ from exr_utils import exr_loader
 from zoedepth.utils.config import get_config
 from importlib import import_module
 project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../'))
-# print(project_path)
+
 import create_pc
-# sys.path.append(project_path+"/torchhub")
-# print(project_path+"/torchhub/facebookresearch_dinov2_main")
+
 from zoedepth.models.depth_model import DepthModel
 from zoedepth.models.builder import build_model
 from zoedepth.trainers.loss import ScaleAndShiftInvariantLoss, compute_scale_and_shift
 from zoedepth.utils.misc import compute_errors, compute_ssi_metrics
 
-# class CameraIntrinsic:
-#     def __init__(self,fx=595.429443359375,fy=595.7514038085938,ppx=321.8606872558594,ppy=239.07879638671875) -> None:
-#         self.fx = fx
-#         self.fy = fy
-#         self.ppx = ppx
-#         self.ppy = ppy
 
 class CameraIntrinsic:
     def __init__(self,fx=900,fy=900,ppx=321.8606872558594,ppy=239.07879638671875) -> None:
@@ -110,18 +103,20 @@ class DAM(object):
         depth_numpy=F.interpolate(output.unsqueeze(0), size=(w, h), mode='bilinear', align_corners=False)
         
         depth_numpy=depth_numpy.to(torch.float32)
-    
+
         # print(depth)
         if depth is not None:
-            
             depth=torch.tensor(depth, dtype=torch.float32).unsqueeze(0).unsqueeze(0)
             depth[depth==0]=1e-3
             mask=(depth>1e-3)
-            print(depth_numpy.shape,torch.tensor(depth).unsqueeze(0).unsqueeze(0).shape )
+            tp_mask=cv2.imread("../../cleargrasp/data/cleargrasp-dataset-test-val/real-test/d415/000000001-mask.png")
+            tp_mask = torch.tensor(tp_mask, dtype=torch.bool)
+            tp_mask=tp_mask.permute(2,0,1)[0].unsqueeze(0)
+            mask=mask & tp_mask
             loss=ScaleAndShiftInvariantLoss()
-            print(loss(depth_numpy, depth,  mask))
-            print(loss(1/depth, depth,  mask ))
-            res=compute_ssi_metrics( depth, 1/depth)
+            # print(loss(depth_numpy, depth,  mask))
+            # print(loss(1/depth, depth,  mask ))
+            res=compute_ssi_metrics(depth, depth_numpy, additional_mask=tp_mask)
             import matplotlib.pyplot as plt
 
             # Visualize depth_numpy
@@ -130,16 +125,24 @@ class DAM(object):
             plt.savefig('depth_numpy.png')
             plt.close()
             print(res)
+            
+            # visualize the depth also
+            plt.imshow(depth.squeeze(), cmap='jet')
+            plt.colorbar()
+            plt.savefig('depth_gt.png')
+            plt.close()
+            
+            plt.imshow(image.squeeze().permute(1,2,0))
+            plt.savefig('rgb.png')
+            plt.close()
+
+            
 
         
     
     def predictDepth(self, image, depth=None, DEVICE="cuda"):
-        
         from zoedepth.models.model_io import load_wts
-    
         checkpoint="./checkpoints/depth_anything_vitl14.pth"
-        # checkpoint="./depth_anything_finetune/mydata.pt"
-        
         config=get_config("zoedepth", "train", "nyu")
         depth_anything = build_model(config)
         depth_anything= load_wts(depth_anything, checkpoint)
@@ -183,7 +186,7 @@ class DAM(object):
         config=get_config("zoedepth", "train", "nyu")
         depth_anything = build_model(config)
         depth_anything= load_wts(depth_anything, checkpoint)
-      
+
         depth_anything = depth_anything.to(DEVICE)
     
         
@@ -230,53 +233,20 @@ def generate_fake_depth(input_folder, output_folder):
 
     
 dam =DAM()
-# depth=exr_loader("/mnt/ssd_990/teng/BinPicking/cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000000-transparent-depth-img.exr", ndim = 1, ndim_representation = ['R'])
-# image = cv2.imread("/mnt/ssd_990/teng/BinPicking/cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000001-transparent-rgb-img.jpg")
+depth=exr_loader("../../cleargrasp/data/cleargrasp-dataset-test-val/real-test/d415/000000001-transparent-depth-img.exr", ndim = 1, ndim_representation = ['R'])
+image = cv2.imread("../../cleargrasp/data/cleargrasp-dataset-test-val/real-test/d415/000000001-transparent-rgb-img.jpg")
+
 from PIL import Image
-image=cv2.imread("./data/nyu/transcg/scene2/71/rgb2.png")
-depth =np.array(Image.open("./data/nyu/transcg/scene2/71/depth2-gt-converted.png"))
+# image=cv2.imread("./data/nyu/transcg/scene2/71/rgb2.png")
+# depth =np.array(Image.open("./data/nyu/transcg/scene2/71/depth2-gt-converted.png"))
 
 # image=cv2.imread("./data/nyu/arcl/001/1_color.png")
 # depth =np.array(Image.open("./data/nyu/arcl/001/1_gt_depth.png"))
 
-
-# depth = dam.predictDepth(image, depth/1000)
-depth=dam.testDAM(image, depth/1000)
+scale=1.
+depth=dam.testDAM(image, depth/scale)
 # dam.dump_to_pointcloud(image)
 
 # generate_fake_depth("/common/home/gt286/BinPicking/objet_dataset/object_dataset_6/", "./fakedepth/")
 
-
-# import cv2
-# import numpy as np
-
-# # Read depth image
-# depth_image = cv2.imread('output_colored.png', cv2.IMREAD_UNCHANGED)
-
-# # Intrinsic parameters
-# fx = 1000  # example focal length
-# fy = 1000  # example focal length
-# cx = depth_image.shape[1] / 2  # example principal point
-# cy = depth_image.shape[0] / 2  # example principal point
-
-# # Convert depth image to point cloud
-# points = []
-# for y in range(depth_image.shape[0]):
-#     for x in range(depth_image.shape[1]):
-#         depth = depth_image[y, x, 0]
-#         if depth > 0:  # ignore invalid depth values
-#             X = (x - cx) * depth / fx
-#             Y = (y - cy) * depth / fy
-#             Z = depth
-#             points.append([X, Y, Z])
-# import open3d as o3d
-# # Convert list of points to numpy array
-# point_cloud = np.array(points)
-
-# # Create Open3D point cloud
-# pcd = o3d.geometry.PointCloud()
-# pcd.points = o3d.utility.Vector3dVector(point_cloud)
-
-# # Visualize the point cloud
-# o3d.visualization.draw_geometries([pcd])
 
