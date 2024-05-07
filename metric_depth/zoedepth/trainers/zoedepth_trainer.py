@@ -72,7 +72,9 @@ class Trainer(BaseTrainer):
             losses[self.silog_loss.name] = l_si
 
             if self.config.w_grad > 0:
+                # print(depths_gt.shape, mask.shape, pred.shape)
                 l_grad = self.grad_loss(pred, depths_gt, mask=mask)
+                
                 loss = loss + self.config.w_grad * l_grad
                 losses[self.grad_loss.name] = l_grad
             else:

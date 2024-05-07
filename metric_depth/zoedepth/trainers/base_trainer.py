@@ -181,23 +181,25 @@ class BaseTrainer:
             pbar = tqdm(enumerate(self.train_loader), desc=f"Epoch: {epoch + 1}/{self.config.epochs}. Loop: Train",
                         total=self.iters_per_epoch) if is_rank_zero(self.config) else enumerate(self.train_loader)
             for i, batch in pbar:
-                
-                if self.should_early_stop():
-                    print("Early stopping")
-                    break
-                # print(f"Batch {self.step+1} on rank {self.config.rank}")
-                losses = self.train_on_batch(batch, i)
-                # print(f"trained batch {self.step+1} on rank {self.config.rank}")
+                try:
+                    if self.should_early_stop():
+                        print("Early stopping")
+                        break
+                    # print(f"Batch {self.step+1} on rank {self.config.rank}")
+                    losses = self.train_on_batch(batch, i)
+                    # print(f"trained batch {self.step+1} on rank {self.config.rank}")
 
-                self.raise_if_nan(losses)
-                if is_rank_zero(self.config) and self.config.print_losses:
-                    pbar.set_description(
-                        f"Epoch: {epoch + 1}/{self.config.epochs}. Loop: Train. Losses: {stringify_losses(losses)}")
-                self.scheduler.step()
+                    self.raise_if_nan(losses)
+                    if is_rank_zero(self.config) and self.config.print_losses:
+                        pbar.set_description(
+                            f"Epoch: {epoch + 1}/{self.config.epochs}. Loop: Train. Losses: {stringify_losses(losses)}")
+                    self.scheduler.step()
 
-                if self.should_log and self.step % 50 == 0:
-                    wandb.log({f"Train/{name}": loss.item()
-                            for name, loss in losses.items()}, step=self.step)
+                    if self.should_log and self.step % 50 == 0:
+                        wandb.log({f"Train/{name}": loss.item()
+                                for name, loss in losses.items()}, step=self.step)
+                except:
+                    pass
 
                 self.step += 1
 

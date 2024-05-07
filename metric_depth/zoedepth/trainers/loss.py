@@ -384,10 +384,31 @@ class ScaleAndShiftInvariantLoss(nn.Module):
         assert torch.isnan(target_disparity*mask).any()==False
         scale, shift = compute_scale_and_shift(prediction, target_disparity, mask)
         assert torch.isnan(scale).any()==False
+        assert torch.isnan(shift).any()==False
         scaled_disparity = scale.view(-1, 1, 1) * prediction + shift.view(-1, 1, 1)
-        assert torch.isnan(scaled_disparity[mask]).any()==False
         loss = nn.functional.l1_loss(scaled_disparity[mask], target_disparity[mask])
-        assert not torch.isnan(loss), f"Nan loss, {scaled_disparity[mask].shape},{target_disparity[mask].shape}"
+        assert torch.isnan(scaled_disparity[mask]).any()==False
+        
+        assert not torch.isnan(loss), f"Nan loss, {scaled_disparity[mask].shape},{target_disparity[mask].shape},{scaled_disparity}, {target_disparity}, {target}"
+        # import matplotlib.pyplot as plt
+
+        # # Assuming scaled_disparity and target_disparity are tensors of the same shape
+        # scaled_disparity = scaled_disparity.detach().cpu().numpy()
+        # target_disparity = target_disparity.detach().cpu().numpy()
+
+        # # Plotting the scaled disparity and target disparity
+        # plt.figure()
+        # plt.plot(prediction[mask].flatten(), target[mask].flatten(), 'bo')
+        # plt.title('Fitting Result')
+        # plt.xlabel('Prediction')
+        # plt.ylabel('Target')
+
+        # plt.plot(prediction[mask].flatten(), (1/scaled_disparity[mask]).flatten(), 'ro')
+
+
+        # plt.savefig('fitting_result.png')
+        # print(type(scaled_disparity),type(mask))
+
         return loss
     
 

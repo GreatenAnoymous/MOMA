@@ -33,9 +33,9 @@ from zoedepth.data.data_mono import DepthDataLoader
 from zoedepth.models.builder import build_model
 from zoedepth.utils.arg_utils import parse_unknown
 from zoedepth.utils.config import change_dataset, get_config, ALL_EVAL_DATASETS, ALL_INDOOR, ALL_OUTDOOR
-from zoedepth.utils.misc import (RunningAverageDict, colors, compute_metrics,
-                        count_parameters)
-
+from zoedepth.utils.misc import (RunningAverageDict, colors, compute_metrics,count_parameters, compute_ssi_metrics)
+from zoedepth.models.base_models.depth_anything import DepthAnythingCore
+from zoedepth.models.model_io import load_wts
 
 @torch.no_grad()
 def infer(model, images, **kwargs):
@@ -60,9 +60,19 @@ def infer(model, images, **kwargs):
     pred2 = torch.flip(pred2, [3])
 
     mean_pred = 0.5 * (pred1 + pred2) 
-    
-
     return mean_pred
+
+
+@torch.no_grad()
+def infer_relative_depth(model,images):
+    import torch.nn.functional as F
+    b,c,w,h=images.shape
+    output=model(images, denorm=False, return_rel_depth=True)
+    disparuty_numpy=F.interpolate(output.unsqueeze(0), size=(w, h), mode='bilinear', align_corners=False)
+        
+    disparuty_numpy=disparuty_numpy.to(torch.float32)
+    
+    return disparuty_numpy
 
 
 @torch.no_grad()
@@ -78,7 +88,7 @@ def evaluate(model, test_loader, config, round_vals=True, round_precision=3):
         depth = depth.squeeze().unsqueeze(0).unsqueeze(0)
         focal = sample.get('focal', torch.Tensor(
             [715.0873]).cuda())  # This magic number (focal) is only used for evaluating BTS model
-        pred = infer(model, image, dataset=sample['dataset'][0], focal=focal)
+        pred = infer_relative_depth(model, image)
 
         # Save image, depth, pred for visualization
         if "save_images" in config and config.save_images:
@@ -96,9 +106,8 @@ def evaluate(model, test_loader, config, round_vals=True, round_precision=3):
             im.save(os.path.join(config.save_images, f"{i}_img.png"))
             Image.fromarray(d).save(os.path.join(config.save_images, f"{i}_depth.png"))
             Image.fromarray(p).save(os.path.join(config.save_images, f"{i}_pred.png"))
-        # print(depth.shape, pred.shape)
-        # print(compute_metrics(depth, pred, config=config))
-        tmp=compute_metrics(depth, pred, config=config)
+
+        tmp=compute_ssi_metrics(depth, pred)
 
         if np.isnan(tmp["a1"]):
             pass
@@ -124,10 +133,16 @@ def evaluate_with_mask(model, test_loader, config, round_vals=True, round_precis
                 continue
         image, depth, mask = sample['image'], sample['depth'], sample['mask']
         image, depth, mask = image.cuda(), depth.cuda(), mask.cuda()
+        
+        if depth.shape[1]!=1:
+            depth=depth.permute(0,3,1,2)
+        if mask.dim() == 4:
+            mask=mask.squeeze(1)
         depth = depth.squeeze().unsqueeze(0).unsqueeze(0)
+        # print(image.shape, depth.shape, mask.shape)
         focal = sample.get('focal', torch.Tensor(
             [715.0873]).cuda())  # This magic number (focal) is only used for evaluating BTS model
-        pred = infer(model, image, dataset=sample['dataset'][0], focal=focal)
+        pred = infer_relative_depth(model, image)
 
         # Save image, depth, pred for visualization
         if "save_images" in config and config.save_images:
@@ -147,7 +162,7 @@ def evaluate_with_mask(model, test_loader, config, round_vals=True, round_precis
             Image.fromarray(p).save(os.path.join(config.save_images, f"{i}_pred.png"))
         # print(depth.shape, pred.shape)
         # print(compute_metrics(depth, pred, config=config))
-        tmp=compute_metrics(depth, pred, config=config)
+        tmp=compute_ssi_metrics(depth, pred, additional_mask=mask)
 
         if np.isnan(tmp["a1"]):
             pass
@@ -163,14 +178,16 @@ def evaluate_with_mask(model, test_loader, config, round_vals=True, round_precis
 
 
 def main(config):
-    model = build_model(config)
+    checkpoint="./depth_anything_finetune/transcg_relative.pt"
+    depth_anything =  DepthAnythingCore.build(img_size=[518,518])
     test_loader = DepthDataLoader(config, 'online_eval').data
-    model = model.cuda()
-    metrics = evaluate(model, test_loader, config)
+    depth_anything = depth_anything.cuda()
+    depth_anything=load_wts(depth_anything, checkpoint)
+    metrics = evaluate_with_mask(depth_anything, test_loader, config)
     print(f"{colors.fg.green}")
     print("metric",metrics)
     print(f"{colors.reset}")
-    metrics['#params'] = f"{round(count_parameters(model, include_all=True)/1e6, 2)}M"
+    metrics['#params'] = f"{round(count_parameters(depth_anything, include_all=True)/1e6, 2)}M"
     return metrics
 
 
@@ -179,8 +196,8 @@ def eval_model(model_name, pretrained_resource, dataset='nyu', **kwargs):
     # Load default pretrained resource defined in config if not set
     overwrite = {**kwargs, "pretrained_resource": pretrained_resource} if pretrained_resource else kwargs
     config = get_config(model_name, "eval", dataset, **overwrite)
-    config.dataset= "cleargrasp"
-    config.cleargrasp_root="../../cleargrasp/"
+    # config.dataset= "cleargrasp"
+    # config.cleargrasp_root="../../cleargrasp/"
     # config = change_dataset(config, dataset)  # change the dataset
     # pprint(config)
     print(f"Evaluating {model_name} on {dataset}...")

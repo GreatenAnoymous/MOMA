@@ -395,6 +395,7 @@ def process_data(
         'cx': torch.tensor(camera_intrinsics[0, 2]),
         'cy': torch.tensor(camera_intrinsics[1, 2])
     }
+    # print("depth gt shape", data_dict["depth"].shape)
 
     if with_original:
         data_dict['depth_original'] = torch.FloatTensor(depth_original)

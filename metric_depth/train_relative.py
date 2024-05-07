@@ -184,7 +184,7 @@ class RelativeTrainer(BaseTrainer):
 
         # print(pred_depths.shape, pred_depths)
 
-        metrics = compute_ssi_metrics(depths_gt, pred_depths, **self.config)
+        metrics = compute_ssi_metrics(depths_gt, pred_depths)
         losses = {f"{self.ssi_loss.name}": l_depth.item()}
 
         if val_step == 1 and self.should_log:
@@ -290,8 +290,8 @@ def main_func():
     else:
         shared_dict = None
     config.shared_dict = shared_dict
-    config.use_lora = True
-
+    config.dataset="cleargrasp"
+    config.cleargrasp_root="/mnt/ssd_990/teng/BinPicking/cleargrasp/"
     config.batch_size = config.bs
     config.mode = 'train'
     config.multigpu=False

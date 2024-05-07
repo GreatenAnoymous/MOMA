@@ -214,6 +214,7 @@ class DepthAnythingCore(nn.Module):
         # self.layer_names = ['out_conv','l4_rn', 'r4', 'r3', 'r2', 'r1']
         self.layer_names = layer_names
         print("depth anything trainable", trainable)
+        
         self.set_trainable(trainable)
         self.set_fetch_features(fetch_features)
 
