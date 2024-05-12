@@ -29,6 +29,91 @@ def model_function(xy, xc, yc, d, alpha, beta, fc):
     return np.cos(beta)*np.cos(alpha)* z -np.sin(beta) * (x - xc) * z*fc  + np.sin(alpha)*np.cos(beta) * (y - yc) * z *fc + d
 
 
+# def local_alignment(ui,vi, u, v, depths, depths_gt,alpha=0.01 , b=1280):
+#     m= u.shape[0]
+
+#     W = np.zeros((m, m))  # Initialize weight matrix
+    
+#     for k in range(m):
+#         dist_k = np.sqrt((u[k] - ui)**2 + (v[k] - vi)**2)
+#         wk = 1 / np.sqrt(2 * np.pi) * np.exp(-alpha* dist_k**2 / (2 * b**2))
+#         W[k, k] = wk
+#     X = np.vstack((depths, np.ones_like(depths)))  # Construct X
+#     X = X.T
+
+#     depths_gt = depths_gt.reshape(-1, 1)
+#     XTWX = np.dot(np.dot(X.T, W), X)
+#     print(XTWX)
+#     XTWy = np.dot(np.dot(X.T, W), depths_gt) 
+#     beta = np.dot(np.linalg.inv(XTWX), XTWy)
+#     return beta
+
+# def compute_local_alignment(u, v, depths, depths_gt, M, N, b=2):
+#     m = u.shape[0]
+#     beta = np.zeros((2, M, N))
+#     for i in range(M):
+#         for j in range(N):
+#             beta[:, i, j] = local_alignment(i, j, u, v, depths, depths_gt, b).flatten()
+#     return beta
+
+def compute_local_alignment(u, v, depths, depths_gt, M, N, b=640, alpha=1e-7):
+    # Compute distance matrix
+    ui, vi = np.indices((M, N))
+    dist = np.sqrt((u[:, None, None] - ui)**2 + (v[:, None, None] - vi)**2)
+    print(dist.shape, depths.shape, depths_gt.shape)
+    # Compute weight matrix
+    w = 1 / np.sqrt(2 * np.pi) * np.exp(-alpha * dist**2 / (2 * b**2))
+    W = np.zeros([len(u), len(u),M,N])
+    W[:, :, ui, vi] = w
+    W=np.transpose(W, (2,3,0,1))
+
+    # Construct X matrix
+    X = np.vstack((depths, np.ones_like(depths)))
+    X = X.T
+
+    # Compute intermediate matrices
+    # XTWX = np.matmul(np.matmul(X.T, W), X)
+    XTWX  =np.einsum('mk,ijkl,ln->ijmn',X.T, W,  X)
+
+    XTWX =np.linalg.pinv(XTWX)
+
+    # exit()
+    # XTWy = np.matmul(np.matmul(X.T, W), depths_gt)
+    depths_gt = depths_gt.reshape(-1, 1)
+    XTWy=np.einsum('mk,ijkl,ln->ijmn',  X.T,W, depths_gt)
+
+    # Compute beta using linear algebra
+    beta = np.einsum('ijkl,ijlm->ijkm', XTWX, XTWy)
+
+    # Reshape beta to match the required output shape
+    print(beta.shape)
+    return beta
+
+def test_function():
+    W,H=640, 480
+    depth = np.random.rand(W, H)
+    depth_gt = np.random.rand(W, H)
+
+    depth_1d = depth.flatten()
+    depth_gt_1d = depth_gt.flatten()
+    
+
+    u, v = np.meshgrid(np.arange(H), np.arange(W))
+    
+    u = u.flatten()
+    v = v.flatten()
+    
+    # Randomly choose 200 points
+    indices = np.random.choice(len(depth_1d), size=50, replace=False)
+
+    # Get the corresponding u, v, depth_gt_1d
+    u_selected = u[indices]
+    v_selected = v[indices]
+    depth_gt_1d_selected = depth_gt_1d[indices]
+    depth_1d_selected = depth_1d[indices]
+    beta=compute_local_alignment(u_selected, v_selected, depth_1d_selected, depth_gt_1d_selected, 640, 480)
+    print(beta.shape)
+
 class CameraIntrinsic:
     def __init__(self,fx=900,fy=900,ppx=321.8606872558594,ppy=239.07879638671875) -> None:
         self.fx = fx
@@ -319,28 +404,29 @@ def generate_fake_depth(input_folder, output_folder):
 
 
     
-dam =DAM()
-depth=exr_loader("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000089-opaque-depth-img.exr", ndim = 1, ndim_representation = ['R'])
-image = cv2.imread("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000089-transparent-rgb-img.jpg")
-mask_image=cv2.imread("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000089-mask.png")
+# dam =DAM()
+# depth=exr_loader("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000089-opaque-depth-img.exr", ndim = 1, ndim_representation = ['R'])
+# image = cv2.imread("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000089-transparent-rgb-img.jpg")
+# mask_image=cv2.imread("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000089-mask.png")
 
 
 
-from PIL import Image
-# image=cv2.imread("./data/nyu/transcg/scene2/70/rgb2.png")
-# depth =np.array(Image.open("./data/nyu/transcg/scene2/70/depth2-gt-converted.png"))
+# from PIL import Image
+# # image=cv2.imread("./data/nyu/transcg/scene2/70/rgb2.png")
+# # depth =np.array(Image.open("./data/nyu/transcg/scene2/70/depth2-gt-converted.png"))
 
-# image=cv2.imread("./data/nyu/pose_test/001/15_opaque_color.png")
-# depth =np.array(Image.open("./data/nyu/pose_test/001/15_gt_depth.png"))
+# # image=cv2.imread("./data/nyu/pose_test/001/15_opaque_color.png")
+# # depth =np.array(Image.open("./data/nyu/pose_test/001/15_gt_depth.png"))
 
-# image=cv2.imread("./data/nyu/clearpose_downsample_100/set1/scene1/010100-color.png")
-# depth =np.array(Image.open("./data/nyu/clearpose_downsample_100/set1/scene1/010100-depth.png"))
+# # image=cv2.imread("./data/nyu/clearpose_downsample_100/set1/scene1/010100-color.png")
+# # depth =np.array(Image.open("./data/nyu/clearpose_downsample_100/set1/scene1/010100-depth.png"))
 
-scale=1
-# depth=dam.testDAM(image, depth/scale)
-dam.predictDepth(image, depth/scale,object_mask=mask_image)
-# dam.dump_to_pointcloud(image)
+# scale=1
+# # depth=dam.testDAM(image, depth/scale)
+# dam.predictDepth(image, depth/scale,object_mask=mask_image)
+# # dam.dump_to_pointcloud(image)
 
-# generate_fake_depth("/common/home/gt286/BinPicking/objet_dataset/object_dataset_6/", "./fakedepth/")
+# # generate_fake_depth("/common/home/gt286/BinPicking/objet_dataset/object_dataset_6/", "./fakedepth/")
 
 
+test_function()
