@@ -59,10 +59,8 @@ DATASETS_CONFIG = {
         "data_path_eval": os.path.join(HOME_DIR, "Kitti/raw_data"),
         "gt_path_eval": os.path.join(HOME_DIR, "Kitti/data_depth_annotated_zoedepth"),
         "filenames_file_eval": "./train_test_inputs/kitti_eigen_test_files_with_gt.txt",
-
         "min_depth_eval": 1e-3,
         "max_depth_eval": 80,
-
         "do_random_rotate": True,
         "degree": 1.0,
         "do_kb_crop": True,
@@ -82,10 +80,8 @@ DATASETS_CONFIG = {
         "data_path_eval": os.path.join(HOME_DIR, "Kitti/raw_data"),
         "gt_path_eval": os.path.join(HOME_DIR, "Kitti/data_depth_annotated_zoedepth"),
         "filenames_file_eval": "./train_test_inputs/kitti_eigen_test_files_with_gt.txt",
-
         "min_depth_eval": 1e-3,
         "max_depth_eval": 80,
-
         "do_random_rotate": False,
         "degree": 1.0,
         "do_kb_crop": True,
@@ -100,23 +96,88 @@ DATASETS_CONFIG = {
         "max_depth": 2,
         "data_path": os.path.join(HOME_DIR, "nyu"),
         "gt_path": os.path.join(HOME_DIR, "nyu"),
-        "filenames_file": "./train_test_inputs/transcg_train_raw.txt",
+        "filenames_file": "./train_test_inputs/transcg_clearpose.txt",
         "input_height": 720,
         "input_width": 1280,
         "data_path_eval": os.path.join(HOME_DIR, "nyu"),
         "gt_path_eval": os.path.join(HOME_DIR, "nyu"),
-        "filenames_file_eval": "./train_test_inputs/transcg_test_raw.txt",
+        "filenames_file_eval": "./train_test_inputs/transcg_test.txt",
         "min_depth_eval": 1e-3,
         "max_depth_eval": 2,
         "min_depth_diff": -10,
         "max_depth_diff": 10,
-
         "do_random_rotate": False,
         "degree": 1.0,
         "do_kb_crop": False,
         "garg_crop": False,
         "eigen_crop": False
     },
+    "transcg":{
+        "dataset": "transcg",
+        "avoid_boundary": False,
+        "min_depth": 1e-3,   # originally 0.1
+        "max_depth": 2,
+        "data_path": os.path.join(HOME_DIR, "nyu"),
+        "gt_path": os.path.join(HOME_DIR, "nyu"),
+        "filenames_file": "./train_test_inputs/transcg_train.txt",
+        "input_height": 720,
+        "input_width": 1280,
+        "data_path_eval": os.path.join(HOME_DIR, "nyu"),
+        "gt_path_eval": os.path.join(HOME_DIR, "nyu"),
+        "filenames_file_eval": "./train_test_inputs/transcg_test.txt",
+        "min_depth_eval": 1e-3,
+        "max_depth_eval": 2,
+        "min_depth_diff": -10,
+        "max_depth_diff": 10,
+        "do_random_rotate": False,
+        "degree": 1.0,
+        "do_kb_crop": False,
+        "garg_crop": False,
+        "eigen_crop": False
+    },
+    "clearpose": {
+        "dataset": "clearpose",
+        "avoid_boundary": False,
+        "min_depth": 1e-3,   # originally 0.1
+        "max_depth": 2,
+        "data_path": os.path.join(HOME_DIR, "nyu"),
+        "gt_path": os.path.join(HOME_DIR, "nyu"),
+        "filenames_file": "./train_test_inputs/clearpose_train.txt",
+        "input_height": 720,
+        "input_width": 1280,
+        "data_path_eval": os.path.join(HOME_DIR, "nyu"),
+        "gt_path_eval": os.path.join(HOME_DIR, "nyu"),
+        "filenames_file_eval": "./train_test_inputs/clearpose_test.txt",
+        "min_depth_eval": 1e-3,
+        "max_depth_eval": 2,
+        "min_depth_diff": -10,
+        "max_depth_diff": 10,
+        "do_random_rotate": False,
+        "degree": 1.0,
+        "do_kb_crop": False,
+        "garg_crop": False,
+        "eigen_crop": False
+    },
+
+    "omniverse": {
+        "dataset": "omniverse",
+        "min_depth_eval": 1e-3,
+        "max_depth_eval": 2,
+        "min_depth": 1e-3,
+        "max_depth": 2,
+        "data_root": "/mnt/ssd_990/teng/BinPicking/DPT_transparent_objects/metric_depth/data/nyu/omniverse_v3/train/20200904"
+    },
+
+    "cleargrasp":{
+        "dataset": "cleargrasp",
+        "min_depth_eval": 1e-3,
+        "max_depth_eval": 2,
+        "min_depth": 1e-3,
+        "max_depth": 2,
+        "data_root": "/mnt/ssd_990/teng/BinPicking/cleargrasp/"
+    },
+
+   
     "ibims": {
         "dataset": "ibims",
         "ibims_root": os.path.join(HOME_DIR, "iBims1/m1455541/ibims1_core_raw/"),
@@ -375,7 +436,7 @@ def get_config(model_name, mode='train', dataset=None, **overwrite_kwargs):
     check_choices("Model", model_name, ["zoedepth", "zoedepth_nk", "damc"])
     check_choices("Mode", mode, ["train", "infer", "eval"])
     if mode == "train":
-        check_choices("Dataset", dataset, ["nyu", "kitti", "mix", None])
+        check_choices("Dataset", dataset, ["nyu", "kitti", "mix", "cleargrasp", "omniverse", "clearpose", "transcg"  ,None])
 
     config = flatten({**COMMON_CONFIG, **COMMON_TRAINING_CONFIG})
     config = update_model_config(config, mode, model_name)

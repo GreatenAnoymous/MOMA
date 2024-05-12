@@ -123,7 +123,9 @@ class SILogLoss(nn.Module):
         self.beta = beta
 
     def forward(self, input, target, mask=None, interpolate=True, return_interpolated=False):
+
         input = extract_key(input, KEY_OUTPUT)
+
         if input.shape[-1] != target.shape[-1] and interpolate:
             input = nn.functional.interpolate(
                 input, target.shape[-2:], mode='bilinear', align_corners=True)

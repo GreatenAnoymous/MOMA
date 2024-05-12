@@ -241,6 +241,7 @@ class DAM(object):
             plt.savefig('rgb.png')
             plt.close()
 
+           
             
  
         
@@ -272,20 +273,20 @@ class DAM(object):
                 mask=mask & object_mask[:,:,0]
             
                     
-            # # Flatten the depth_numpy and depth arrays
-            # depth_numpy_flat = depth_numpy[mask].flatten()
-            # depth_flat = depth[mask].flatten()
+            # Flatten the depth_numpy and depth arrays
+            depth_numpy_flat = depth_numpy[mask].flatten()
+            depth_flat = depth[mask].flatten()
 
-            # # Fit a linear function to the data
-            # coefficients = np.polyfit(1/depth_numpy_flat, 1/depth_flat, 1)
+            # Fit a linear function to the data
+            coefficients = np.polyfit(depth_numpy_flat, depth_flat, 1)
 
-            # # Extract the slope and intercept from the coefficients
-            # slope = coefficients[0]
-            # intercept = coefficients[1]
+            # Extract the slope and intercept from the coefficients
+            slope = coefficients[0]
+            intercept = coefficients[1]
 
-            # # Apply the linear function to depth_numpy
-            # # print(slope,"slope", intercept, "intercept")
-            # fitted_depths = 1/(1/depth_numpy * slope + intercept)
+            # Apply the linear function to depth_numpy
+            # print(slope,"slope", intercept, "intercept")
+            scaled_fitted_depths = depth_numpy * slope + intercept
             
             nonzero_indices = np.nonzero(depth)
             nonzero_indices = np.nonzero(depth)
@@ -335,6 +336,11 @@ class DAM(object):
             plt.savefig('fitted_depth.png')
             plt.close()
             
+
+            plt.imshow(scaled_fitted_depths.squeeze(), cmap='jet',vmin=0.3, vmax=1)
+            plt.colorbar()
+            plt.savefig('scaled_fitted_depth.png')
+            plt.close()
             
             plt.imshow(depth.squeeze(), cmap='jet',vmin=0.3, vmax=1)
             plt.colorbar()
@@ -346,6 +352,38 @@ class DAM(object):
             plt.imshow(image)
             plt.savefig('rgb.png')
             plt.close()
+
+            print(depth.shape)
+            w,h=depth.shape[0], depth.shape[1]
+            depth_gt_1d=depth.flatten()
+            depth_1d=depth_numpy.flatten()
+            valid=depth_gt_1d>0
+            depth_gt_1d=depth_gt_1d[valid]
+            depth_1d=depth_1d[valid]
+            u,v=np.meshgrid(np.arange(h), np.arange(w))
+            u=u.flatten()
+            v=v.flatten()
+            u=u[valid]
+            v=v[valid]  
+            indices = np.random.choice(len(depth_1d), size=50, replace=False)
+            u_selected = u[indices]
+            v_selected = v[indices]
+            depth_gt_1d_selected = depth_gt_1d[indices]
+            depth_1d_selected = depth_1d[indices]
+            beta=compute_local_alignment(u_selected, v_selected, depth_1d_selected, depth_gt_1d_selected, w, h)
+            print(beta.shape)
+            # expanded_depth = np.expand_dims(depth, axis=-1)
+
+            # Perform the element-wise multiplication and addition
+            recovered_depth = beta[..., 0, 0] * depth_numpy + beta[..., 1, 0]
+            
+            plt.imshow(recovered_depth.reshape(w,h), cmap='jet',vmin=0, vmax=1.5)
+            plt.colorbar()
+            plt.savefig('depth_recovered.png')
+            plt.close()
+
+
+
 
         # depth_pil = depth_anything.infer_pil(image, output_type="pil")  # as 16-bit PIL Image
 
@@ -404,10 +442,10 @@ def generate_fake_depth(input_folder, output_folder):
 
 
     
-# dam =DAM()
-# depth=exr_loader("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000089-opaque-depth-img.exr", ndim = 1, ndim_representation = ['R'])
-# image = cv2.imread("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000089-transparent-rgb-img.jpg")
-# mask_image=cv2.imread("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000089-mask.png")
+dam =DAM()
+depth=exr_loader("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000089-opaque-depth-img.exr", ndim = 1, ndim_representation = ['R'])
+image = cv2.imread("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000089-transparent-rgb-img.jpg")
+mask_image=cv2.imread("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000089-mask.png")
 
 
 
@@ -421,12 +459,12 @@ def generate_fake_depth(input_folder, output_folder):
 # # image=cv2.imread("./data/nyu/clearpose_downsample_100/set1/scene1/010100-color.png")
 # # depth =np.array(Image.open("./data/nyu/clearpose_downsample_100/set1/scene1/010100-depth.png"))
 
-# scale=1
+scale=1
 # # depth=dam.testDAM(image, depth/scale)
-# dam.predictDepth(image, depth/scale,object_mask=mask_image)
+dam.predictDepth(image, depth/scale,object_mask=mask_image)
 # # dam.dump_to_pointcloud(image)
 
 # # generate_fake_depth("/common/home/gt286/BinPicking/objet_dataset/object_dataset_6/", "./fakedepth/")
 
 
-test_function()
+# test_function()

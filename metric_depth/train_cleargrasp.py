@@ -136,7 +136,7 @@ if __name__ == '__main__':
     config.shared_dict = shared_dict
     config.use_lora = True
     config.dataset="cleargrasp"
-    config.cleargrasp_root="/mnt/ssd_990/teng/BinPicking/cleargrasp/"
+    config.data_root="/mnt/ssd_990/teng/BinPicking/cleargrasp/"
     config.batch_size = config.bs
     config.mode = 'train'
     if config.root != "." and not os.path.isdir(config.root):

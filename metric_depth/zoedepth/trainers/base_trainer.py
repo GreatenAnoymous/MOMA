@@ -111,6 +111,7 @@ class BaseTrainer:
         return optim.AdamW(params, lr=self.config.lr, weight_decay=self.config.wd)
 
     def init_scheduler(self):
+        
         lrs = [l['lr'] for l in self.optimizer.param_groups]
         return optim.lr_scheduler.OneCycleLR(self.optimizer, lrs, epochs=self.config.epochs, steps_per_epoch=len(self.train_loader),
                                              cycle_momentum=self.config.cycle_momentum,
@@ -173,7 +174,6 @@ class BaseTrainer:
         for epoch in range(self.config.epochs):
             if self.should_early_stop():
                 break
-            
             self.epoch = epoch
             ################################# Train loop ##########################################################
             if self.should_log:

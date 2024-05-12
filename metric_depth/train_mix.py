@@ -27,7 +27,7 @@ from zoedepth.utils.config import get_config
 from zoedepth.utils.arg_utils import parse_unknown
 from zoedepth.trainers.builder import get_trainer
 from zoedepth.models.builder import build_model
-from zoedepth.data.data_mono import MixedNYUKITTI
+from zoedepth.data.data_mono import MixedNYUKITTI, TransMixDataloader
 import torch.utils.data.distributed
 import torch.multiprocessing as mp
 import torch
@@ -94,8 +94,7 @@ def main_worker(gpu, ngpus_per_node, config):
 
         model = build_model(config)
         
-        # print(model)
-        
+
         model = load_ckpt(config, model)
         model = parallelize(config, model)
 
@@ -103,8 +102,11 @@ def main_worker(gpu, ngpus_per_node, config):
         config.total_params = total_params
         print(f"Total parameters : {total_params}")
 
-        train_loader = MixedNYUKITTI(config, "train").data
-        test_loader = MixedNYUKITTI(config, "online_eval").data
+        train_loader=TransMixDataloader(config, "train").data
+        test_loader=TransMixDataloader(config, "online_eval").data
+
+        # train_loader = MixedNYUKITTI(config, "train").data
+        # test_loader = MixedNYUKITTI(config, "online_eval").data
 
         trainer = get_trainer(config)(
             config, model, train_loader, test_loader, device=config.gpu)
@@ -137,7 +139,7 @@ if __name__ == '__main__':
     else:
         shared_dict = None
     config.shared_dict = shared_dict
-
+    config.use_lora = True
     config.batch_size = config.bs
     config.mode = 'train'
     if config.root != "." and not os.path.isdir(config.root):
@@ -169,6 +171,8 @@ if __name__ == '__main__':
 
     ngpus_per_node = torch.cuda.device_count()
     config.num_workers = config.workers
+    config.distributed=False
+    config.nproc_per_node = 1
     config.ngpus_per_node = ngpus_per_node
     print("Config:")
     pprint(config)
