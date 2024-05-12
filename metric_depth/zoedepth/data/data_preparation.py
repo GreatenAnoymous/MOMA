@@ -10,11 +10,114 @@ import torch
 import Imath
 import random
 import OpenEXR
+from PIL import Image, ImageOps
 import numpy as np
-# from utils.functions import get_surface_normal_from_depth
-# from utils.constants import DILATION_KERNEL
+import torch.nn as nn
+from torchvision import transforms
 from scipy.interpolate import NearestNDInterpolator
 DILATION_KERNEL = np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]]).astype(np.uint8)
+
+
+def remove_leading_slash(s):
+    if s[0] == '/' or s[0] == '\\':
+        return s[1:]
+    return s
+def _is_pil_image(img):
+    return isinstance(img, Image.Image)
+
+
+def _is_numpy_image(img):
+    return isinstance(img, np.ndarray) and (img.ndim in {2, 3})
+
+
+
+
+class ToTensor(object):
+    def __init__(self, mode, do_normalize=False, size=None):
+        self.mode = mode
+        self.normalize = transforms.Normalize(
+            mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]) if do_normalize else nn.Identity()
+        self.size = size
+        if size is not None:
+            self.resize = transforms.Resize(size=size)
+        else:
+            self.resize = nn.Identity()
+
+    def __call__(self, sample):
+        image, focal = sample['image'], sample['focal']
+        image = self.to_tensor(image)
+        image = self.normalize(image)
+        image = self.resize(image)
+
+        if self.mode == 'test':
+            return {'image': image, 'focal': focal}
+
+        depth = sample['depth']
+        if self.mode == 'train':
+            depth = self.to_tensor(depth)
+            return {**sample, 'image': image, 'depth': depth, 'focal': focal}
+        else:
+            has_valid_depth = sample['has_valid_depth']
+            image = self.resize(image)
+            return {**sample, 'image': image, 'depth': depth, 'focal': focal, 'has_valid_depth': has_valid_depth,
+                    'image_path': sample['image_path'], 'depth_path': sample['depth_path']}
+
+    def to_tensor(self, pic):
+        if not (_is_pil_image(pic) or _is_numpy_image(pic)):
+            raise TypeError(
+                'pic should be PIL Image or ndarray. Got {}'.format(type(pic)))
+
+        if isinstance(pic, np.ndarray):
+            img = torch.from_numpy(pic.transpose((2, 0, 1)))
+            return img
+
+        # handle PIL Image
+        if pic.mode == 'I':
+            img = torch.from_numpy(np.array(pic, np.int32, copy=False))
+        elif pic.mode == 'I;16':
+            img = torch.from_numpy(np.array(pic, np.int16, copy=False))
+        else:
+            img = torch.ByteTensor(
+                torch.ByteStorage.from_buffer(pic.tobytes()))
+        # PIL image mode: 1, L, P, I, F, RGB, YCbCr, RGBA, CMYK
+        if pic.mode == 'YCbCr':
+            nchannel = 3
+        elif pic.mode == 'I;16':
+            nchannel = 1
+        else:
+            nchannel = len(pic.mode)
+        img = img.view(pic.size[1], pic.size[0], nchannel)
+
+        img = img.transpose(0, 1).transpose(0, 2).contiguous()
+        if isinstance(img, torch.ByteTensor):
+            return img.float()
+        else:
+            return img
+
+
+class CachedReader:
+    def __init__(self, shared_dict=None):
+        if shared_dict:
+            self._cache = shared_dict
+        else:
+            self._cache = {}
+
+    def open(self, fpath):
+        im = self._cache.get(fpath, None)
+        if im is None:
+            im = self._cache[fpath] = Image.open(fpath)
+        return im
+
+
+class ImReader:
+    def __init__(self):
+        pass
+
+    # @cache
+    def open(self, fpath):
+        return Image.open(fpath)
+    
+    
 
 def chromatic_transform(image):
     """
@@ -368,10 +471,11 @@ def process_data(
         loss_mask_dilated = zero_mask_dilated
 
     # Normalization
-    # depth_min = depth.min() - 0.5 * depth.std() - 1e-6
-    # depth_max = depth.max() + 0.5 * depth.std() + 1e-6
-    # depth = (depth - depth_min) / (depth_max - depth_min)
-    
+    if kwargs.get("depth_norm") is not None:
+        depth_min = depth.min() - 0.5 * depth.std() - 1e-6
+        depth_max = depth.max() + 0.5 * depth.std() + 1e-6
+        depth = (depth - depth_min) / (depth_max - depth_min)
+        
     
 
     data_dict = {
@@ -406,4 +510,5 @@ def process_data(
     # data_dict['depth_gt_sn'] = get_surface_normal_from_depth(data_dict['depth_gt'].unsqueeze(0), data_dict['fx'].unsqueeze(0), data_dict['fy'].unsqueeze(0), data_dict['cx'].unsqueeze(0), data_dict['cy'].unsqueeze(0)).squeeze(0)
     # print(data_dict["image"].shape, data_dict["depth"].shape)
     return data_dict    
+
 

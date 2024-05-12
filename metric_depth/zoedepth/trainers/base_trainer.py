@@ -198,42 +198,43 @@ class BaseTrainer:
                     if self.should_log and self.step % 50 == 0:
                         wandb.log({f"Train/{name}": loss.item()
                                 for name, loss in losses.items()}, step=self.step)
-                except:
-                    pass
+                
 
-                self.step += 1
+                    self.step += 1
 
-                ########################################################################################################
+                    ########################################################################################################
 
-                if self.test_loader:
-                    if (self.step % validate_every) == 0:
-                        self.model.eval()
-                        # if self.should_write:
-                        #     self.save_checkpoint(
-                        #         f"{self.config.experiment_id}_latest.pt")
+                    if self.test_loader:
+                        if (self.step % validate_every) == 0:
+                            self.model.eval()
+                            # if self.should_write:
+                            #     self.save_checkpoint(
+                            #         f"{self.config.experiment_id}_latest.pt")
 
-                        ################################# Validation loop ##################################################
-                        # validate on the entire validation set in every process but save only from rank 0, I know, inefficient, but avoids divergence of processes
-                        metrics, test_losses = self.validate()
-                        assert test_losses is not None
-                        print("Validated: {}".format(metrics))
-                        if self.should_log:
-                            wandb.log(
-                                {f"Test/{name}": tloss for name, tloss in test_losses.items()}, step=self.step)
+                            ################################# Validation loop ##################################################
+                            # validate on the entire validation set in every process but save only from rank 0, I know, inefficient, but avoids divergence of processes
+                            metrics, test_losses = self.validate()
+                            assert test_losses is not None
+                            print("Validated: {}".format(metrics))
+                            if self.should_log:
+                                wandb.log(
+                                    {f"Test/{name}": tloss for name, tloss in test_losses.items()}, step=self.step)
 
-                            wandb.log({f"Metrics/{k}": v for k,
-                                    v in metrics.items()}, step=self.step)
+                                wandb.log({f"Metrics/{k}": v for k,
+                                        v in metrics.items()}, step=self.step)
 
-                            if (metrics[self.metric_criterion] < best_loss) and self.should_write:
-                                self.save_checkpoint(
-                                    f"{self.config.experiment_id}_best.pt")
-                                best_loss = metrics[self.metric_criterion]
+                                if (metrics[self.metric_criterion] < best_loss) and self.should_write:
+                                    self.save_checkpoint(
+                                        f"{self.config.experiment_id}_best.pt")
+                                    best_loss = metrics[self.metric_criterion]
 
-                        self.model.train()
+                            self.model.train()
 
-                        if self.config.distributed:
-                            dist.barrier()
-               
+                            if self.config.distributed:
+                                dist.barrier()
+                except Exception as e:
+                    print(f"Error: {e}")
+
                         
                         # print(f"Validated: {metrics} on device {self.config.rank}")
             # self.save_checkpoint(f"{self.config.experiment_id}_latest.pt")
@@ -245,20 +246,22 @@ class BaseTrainer:
         self.model.eval()
         
         if self.test_loader:
+            try:
+                ################################# Validation loop ##################################################
+                metrics, test_losses = self.validate()
+                # print("Validated: {}".format(metrics))
+                if self.should_log:
+                    wandb.log({f"Test/{name}": tloss for name,
+                            tloss in test_losses.items()}, step=self.step)
+                    wandb.log({f"Metrics/{k}": v for k,
+                            v in metrics.items()}, step=self.step)
 
-            ################################# Validation loop ##################################################
-            metrics, test_losses = self.validate()
-            # print("Validated: {}".format(metrics))
-            if self.should_log:
-                wandb.log({f"Test/{name}": tloss for name,
-                          tloss in test_losses.items()}, step=self.step)
-                wandb.log({f"Metrics/{k}": v for k,
-                          v in metrics.items()}, step=self.step)
-
-                if (metrics[self.metric_criterion] < best_loss) and self.should_write:
-                    self.save_checkpoint(
-                        f"{self.config.experiment_id}_best.pt")
-                    best_loss = metrics[self.metric_criterion]
+                    if (metrics[self.metric_criterion] < best_loss) and self.should_write:
+                        self.save_checkpoint(
+                            f"{self.config.experiment_id}_best.pt")
+                        best_loss = metrics[self.metric_criterion]
+            except Exception as e:
+                print(f"Error: {e}")
 
         self.model.train()
 

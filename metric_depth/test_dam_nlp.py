@@ -17,17 +17,11 @@ from zoedepth.models.depth_model import DepthModel
 from zoedepth.models.builder import build_model
 from zoedepth.trainers.loss import ScaleAndShiftInvariantLoss, compute_scale_and_shift
 from zoedepth.utils.misc import compute_errors, compute_ssi_metrics, compute_align
-
-
+from scipy.spatial.transform import Rotation
+from scipy.optimize import minimize
 import numpy as np
 from scipy.optimize import curve_fit
-
-
-def model_function(xy, xc, yc, d, alpha, beta, fc):
-    x, y,z  = xy
-   # assuming z is the third element of xy
-    return np.cos(beta)*np.cos(alpha)* z -np.sin(beta) * (x - xc) * z*fc  + np.sin(alpha)*np.cos(beta) * (y - yc) * z *fc + d
-
+import nlopt
 
 class CameraIntrinsic:
     def __init__(self,fx=900,fy=900,ppx=321.8606872558594,ppy=239.07879638671875) -> None:
@@ -35,6 +29,93 @@ class CameraIntrinsic:
         self.fy = fy
         self.ppx = ppx
         self.ppy = ppy
+
+
+
+def model_function(xy, xc, yc, theta1, theta2, d, lambda1, lambda2, lambda3):
+    x, y,z  = xy
+   # assuming z is the third element of xy
+    return lambda3* z + lambda1 * (x - xc) * np.cos(theta1) + lambda2 * (y - yc) * np.cos(theta2) + d
+
+
+
+def rotation_matrix(roll, pitch, yaw):
+    """
+    Compute rotation matrix from roll, pitch, and yaw angles.
+    """
+    # Convert angles to radians
+    roll_rad = np.radians(roll)
+    pitch_rad = np.radians(pitch)
+    yaw_rad = np.radians(yaw)
+    
+    # Compute rotation matrix
+    R_x = np.array([[1, 0, 0],
+                    [0, np.cos(roll_rad), -np.sin(roll_rad)],
+                    [0, np.sin(roll_rad), np.cos(roll_rad)]])
+    R_y = np.array([[np.cos(pitch_rad), 0, np.sin(pitch_rad)],
+                    [0, 1, 0],
+                    [-np.sin(pitch_rad), 0, np.cos(pitch_rad)]])
+    R_z = np.array([[np.cos(yaw_rad), -np.sin(yaw_rad), 0],
+                    [np.sin(yaw_rad), np.cos(yaw_rad), 0],
+                    [0, 0, 1]])
+    
+    return np.dot(R_z, np.dot(R_y, R_x))
+
+def forward_transform(params, u, v, zc):
+    """
+    Compute forward transform X = R * Xc + T.
+    """
+    cxc, cyc, fc, roll, pitch, yaw, dx, dy, dz = params
+    R = rotation_matrix(roll, pitch, yaw)
+    xc = zc * (u - cxc) / fc
+    yc = zc * (v - cyc) / fc
+    Xc = np.array([xc, yc, zc])
+    T = np.array([dx, dy, dz])
+    X = np.dot(R, Xc) + T
+    return X
+import numpy as np
+
+def objective_function(params, inputs, outputs):
+    """
+    Objective function to minimize the difference between expected and actual values of X.
+    """
+    # Unpack parameters
+    cxc, cyc, fc, roll, pitch, yaw, dx, dy, dz = params
+    
+    # Extract inputs
+    u, v, zc = np.array(inputs).T
+    
+    # Calculate expected X using vectorized operations
+    CI = CameraIntrinsic()
+    x = (u - CI.ppx) * zc / CI.fx
+    y = (v - CI.ppy) * zc / CI.fy
+    z = zc
+    Xc = np.array([x, y, z])
+    R = rotation_matrix(roll, pitch, yaw)
+    T = np.array([dx, dy, dz])
+    T = np.tile(T, (Xc.shape[1], 1)).T
+    # print(Xc.shape, R.shape, T.shape)
+    expected_X = np.dot(R, Xc) + T
+    
+    # Extract outputs
+    u_out, v_out, zc_out = np.array(outputs).T
+    actual_X = np.array([(u - CI.ppx) * zc_out / CI.fx, (v - CI.ppy) * zc_out / CI.fy, zc_out]).T
+    # print(expected_X.shape, actual_X.shape)
+    # Calculate error using vectorized operations
+    error = np.sum(np.linalg.norm(expected_X.T - actual_X, axis=1))/len(inputs)
+    print(error)
+    
+    return error
+
+def one_shot_predict(optimized_params, i,j, zc):
+    cxc, cyc, fc, roll, pitch, yaw, dx, dy, dz = optimized_params
+    R = rotation_matrix(roll, pitch, yaw)
+    xc = zc * (i - cxc) / fc
+    yc = zc * (j - cyc) / fc
+    Xc = np.array([xc, yc, zc])
+    T = np.array([dx, dy, dz])
+    X = np.dot(R, Xc) + T
+    return X[2]
 
 
 def build_model(config) -> DepthModel:
@@ -160,16 +241,13 @@ class DAM(object):
  
         
     
-    def predictDepth(self, image, depth=None, object_mask=None , DEVICE="cuda"):
-        if object_mask is not None:
-            object_mask=np.array(object_mask)
-            object_mask=object_mask>0
+    def predictDepth(self, image, depth=None, DEVICE="cuda"):
+        
         checkpoint="./depth_anything_finetune/transcg_dam.pt"
-        # checkpoint="./checkpoints/depth_anything_metric_depth_indoor.pt"
         config=get_config("zoedepth", "train", "nyu")
         depth_anything = build_model(config)
         depth_anything= load_wts(depth_anything, checkpoint)
-        
+
         depth_anything = depth_anything.to(DEVICE)
 
         from PIL import Image
@@ -177,64 +255,51 @@ class DAM(object):
         # image = Image.open("/common/home/gt286/BinPicking/Depth-Anything/metric_depth/data/nyu/transcg/scene18/0/rgb1.png").convert("RGB")  # load
         depth_numpy = depth_anything.infer_pil(image)  # as numpy
         
-        # print(depth_numpy)
-
+        print(depth_numpy)
+        # print(depth)
         if depth is not None:
             depth=np.array(depth)
-            depth[np.isnan(depth)] = 0
             mask = np.logical_and((depth> 0),(depth<1))
-            if object_mask is not None:
-                mask=mask & object_mask[:,:,0]
-            
-                    
-            # # Flatten the depth_numpy and depth arrays
-            # depth_numpy_flat = depth_numpy[mask].flatten()
-            # depth_flat = depth[mask].flatten()
-
-            # # Fit a linear function to the data
-            # coefficients = np.polyfit(1/depth_numpy_flat, 1/depth_flat, 1)
-
-            # # Extract the slope and intercept from the coefficients
-            # slope = coefficients[0]
-            # intercept = coefficients[1]
-
-            # # Apply the linear function to depth_numpy
-            # # print(slope,"slope", intercept, "intercept")
-            # fitted_depths = 1/(1/depth_numpy * slope + intercept)
-            
-            nonzero_indices = np.nonzero(depth)
+   
             nonzero_indices = np.nonzero(depth)
             x_data = nonzero_indices[0]
             y_data = nonzero_indices[1]
+            #predicted from models
             z_data = depth_numpy[nonzero_indices]
-            zt_data = depth[nonzero_indices]
-            # x_data = nonzero_indices[0]
-            # y_data = nonzero_indices[1]
-            # z_data = depth_numpy[nonzero_indices]
-            # zt_data=depth[nonzero_indices]
-            initial_guess = [0, 0, 0, 0, 0, 1]
-            popt, pcov = curve_fit(model_function, (x_data, y_data, z_data), zt_data, p0=initial_guess)
+            # gt    
+            zt_data=depth[nonzero_indices]
+            inputs = np.concatenate((x_data[:, np.newaxis], y_data[:, np.newaxis], z_data[:, np.newaxis]), axis=1)
+            outputs=np.concatenate((x_data[:, np.newaxis], y_data[:, np.newaxis], zt_data[:, np.newaxis]), axis=1)
+            
 
-            xc_opt, yc_opt,  d_opt, lambda1_opt, lambda2_opt, lambda3_opt =[534.2324844480863, -190.42289893222687, -0.4183163449642485, 0.0001494418507248443, 0.0011123054000330792, 2.994101666824724]
-            # xc_opt, yc_opt,  d_opt, lambda1_opt, lambda2_opt, lambda3_opt =[-12876.598818650644, 3879.3807488025254, 0.09036849843330247, 1.7720131641397066e-05, 7.030278082064835e-05, 0.4987274794212721]
-            xc_opt, yc_opt,  d_opt, lambda1_opt, lambda2_opt, lambda3_opt = popt
+            initial_params = [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+            # optimized_params = minimize(one_shot_error_function, initial_guess, args=(pixel_depth,), method="CG", options={"maxiter": 1,"disp": True})
+            opt = nlopt.opt(nlopt.LN_BOBYQA, len(initial_params))
+            opt.set_min_objective(lambda params, grad: objective_function(params, inputs, outputs))
+            opt.set_lower_bounds([-1000] * len(initial_params))  # No lower bounds for parameters
+            opt.set_upper_bounds([1000] * len(initial_params))   # No upper bounds for parameters
+            opt.set_stopval(0.03) 
+            # opt.set_ftol_rel(1e-2)
+            result = opt.optimize(initial_params)
+            final_error = opt.last_optimum_value()
+
+            print("Final error:", final_error)
+            print(result)
+        
 
             fitted_depths=np.zeros_like(depth)
             for i in range(depth.shape[0]):
                 for j in range(depth.shape[1]):
-                    fitted_depths[i,j]=model_function((i,j,depth_numpy[i,j]), xc_opt, yc_opt,  d_opt, lambda1_opt, lambda2_opt, lambda3_opt)
+                    # fitted_depths[i,j]=model_function((i,j,depth_numpy[i,j]), xc_opt, yc_opt, theta1_opt, theta2_opt, d_opt, lambda1_opt, lambda2_opt, lambda3_opt)
+                    fitted_depths[i,j]=one_shot_predict(result, i,j,depth_numpy[i,j])
             
             # print(depth_numpy.shape, depth.shape, torch.tensor(mask).unsqueeze(0).unsqueeze(0).shape)
-            print([xc_opt, yc_opt, d_opt, lambda1_opt, lambda2_opt, lambda3_opt])
+            # print(xc_opt, yc_opt, theta1_opt, theta2_opt, d_opt, lambda1_opt, lambda2_opt, lambda3_opt)
             # # Calculate absolute differences between original and fitted depth maps
             absolute_diff = np.abs(depth[mask] - fitted_depths[mask])
-            print(fitted_depths[mask])
 
             # # Calculate mean absolute error
             mean_absolute_error = np.mean(absolute_diff)
-
-            metrics=compute_errors(depth[mask], fitted_depths[mask])
-            print(metrics)
 
             print("Mean Absolute Error (MAE):", mean_absolute_error)
             import matplotlib.pyplot as plt
@@ -256,8 +321,7 @@ class DAM(object):
             plt.savefig('depth_gt.png')
             plt.close()
 
-            if object_mask is not None:
-                image[~object_mask]=0
+
             plt.imshow(image)
             plt.savefig('rgb.png')
             plt.close()
@@ -320,25 +384,22 @@ def generate_fake_depth(input_folder, output_folder):
 
     
 dam =DAM()
-depth=exr_loader("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000089-opaque-depth-img.exr", ndim = 1, ndim_representation = ['R'])
-image = cv2.imread("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000089-transparent-rgb-img.jpg")
-mask_image=cv2.imread("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000089-mask.png")
-
-
+depth=exr_loader("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000017-transparent-depth-img.exr", ndim = 1, ndim_representation = ['R'])
+image = cv2.imread("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000017-transparent-rgb-img.jpg")
 
 from PIL import Image
 # image=cv2.imread("./data/nyu/transcg/scene2/70/rgb2.png")
 # depth =np.array(Image.open("./data/nyu/transcg/scene2/70/depth2-gt-converted.png"))
 
-# image=cv2.imread("./data/nyu/pose_test/001/15_opaque_color.png")
-# depth =np.array(Image.open("./data/nyu/pose_test/001/15_gt_depth.png"))
+# image=cv2.imread("./data/nyu/pose_test/001/5_opaque_color.png")
+# depth =np.array(Image.open("./data/nyu/pose_test/001/5_gt_depth.png"))
 
 # image=cv2.imread("./data/nyu/clearpose_downsample_100/set1/scene1/010100-color.png")
 # depth =np.array(Image.open("./data/nyu/clearpose_downsample_100/set1/scene1/010100-depth.png"))
 
 scale=1
 # depth=dam.testDAM(image, depth/scale)
-dam.predictDepth(image, depth/scale,object_mask=mask_image)
+dam.predictDepth(image, depth/scale)
 # dam.dump_to_pointcloud(image)
 
 # generate_fake_depth("/common/home/gt286/BinPicking/objet_dataset/object_dataset_6/", "./fakedepth/")

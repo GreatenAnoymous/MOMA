@@ -40,6 +40,8 @@ from torchvision import transforms
 
 from zoedepth.utils.config import change_dataset
 
+from .data_preparation import ImReader, ToTensor, CachedReader
+
 from .ddad import get_ddad_loader
 from .diml_indoor_test import get_diml_indoor_loader
 from .diml_outdoor_test import get_diml_outdoor_loader
@@ -52,13 +54,7 @@ from .vkitti2 import get_vkitti2_loader
 
 from .preprocess import CropParams, get_white_border, get_black_border
 from .cleargrasp import *
-
-def _is_pil_image(img):
-    return isinstance(img, Image.Image)
-
-
-def _is_numpy_image(img):
-    return isinstance(img, np.ndarray) and (img.ndim in {2, 3})
+from .depth_complete import *
 
 
 def preprocessing_transforms(mode, **kwargs):
@@ -81,6 +77,18 @@ class DepthDataLoader(object):
 
         self.config = config
         print(config.dataset,"current dataset")
+        if config.dataset=='depth_complete':
+            if mode == 'train':
+                pin_memory = True
+                num_workers = config.workers
+                batch_size = config.batch_size
+            else:
+                pin_memory = False
+                num_workers=1
+                batch_size=1
+            self.data = DataLoader(DepthCompleteData(config, mode, transform=transform), batch_size=batch_size,  num_workers=num_workers, pin_memory=pin_memory)
+            return
+        
         if config.dataset=='cleargrasp':
             self.data= get_cleargrasp_loader(config, mode, batch_size=1, num_workers=1)
             return 
@@ -243,37 +251,11 @@ class MixedNYUKITTI(object):
             self.data = DepthDataLoader(nyu_conf, mode, device=device).data
 
 
-def remove_leading_slash(s):
-    if s[0] == '/' or s[0] == '\\':
-        return s[1:]
-    return s
-
-
-class CachedReader:
-    def __init__(self, shared_dict=None):
-        if shared_dict:
-            self._cache = shared_dict
-        else:
-            self._cache = {}
-
-    def open(self, fpath):
-        im = self._cache.get(fpath, None)
-        if im is None:
-            im = self._cache[fpath] = Image.open(fpath)
-        return im
-
-
-class ImReader:
-    def __init__(self):
-        pass
-
-    # @cache
-    def open(self, fpath):
-        return Image.open(fpath)
 
 
 
 
+###################################################################################
 
 class DataLoadPreprocess(Dataset):
     def __init__(self, config, mode, transform=None, is_for_online_eval=False, **kwargs):
@@ -716,65 +698,3 @@ class DataLoadPreprocessWithMask(DataLoadPreprocess):
 
         return sample
 
-
-class ToTensor(object):
-    def __init__(self, mode, do_normalize=False, size=None):
-        self.mode = mode
-        self.normalize = transforms.Normalize(
-            mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]) if do_normalize else nn.Identity()
-        self.size = size
-        if size is not None:
-            self.resize = transforms.Resize(size=size)
-        else:
-            self.resize = nn.Identity()
-
-    def __call__(self, sample):
-        image, focal = sample['image'], sample['focal']
-        image = self.to_tensor(image)
-        image = self.normalize(image)
-        image = self.resize(image)
-
-        if self.mode == 'test':
-            return {'image': image, 'focal': focal}
-
-        depth = sample['depth']
-        if self.mode == 'train':
-            depth = self.to_tensor(depth)
-            return {**sample, 'image': image, 'depth': depth, 'focal': focal}
-        else:
-            has_valid_depth = sample['has_valid_depth']
-            image = self.resize(image)
-            return {**sample, 'image': image, 'depth': depth, 'focal': focal, 'has_valid_depth': has_valid_depth,
-                    'image_path': sample['image_path'], 'depth_path': sample['depth_path']}
-
-    def to_tensor(self, pic):
-        if not (_is_pil_image(pic) or _is_numpy_image(pic)):
-            raise TypeError(
-                'pic should be PIL Image or ndarray. Got {}'.format(type(pic)))
-
-        if isinstance(pic, np.ndarray):
-            img = torch.from_numpy(pic.transpose((2, 0, 1)))
-            return img
-
-        # handle PIL Image
-        if pic.mode == 'I':
-            img = torch.from_numpy(np.array(pic, np.int32, copy=False))
-        elif pic.mode == 'I;16':
-            img = torch.from_numpy(np.array(pic, np.int16, copy=False))
-        else:
-            img = torch.ByteTensor(
-                torch.ByteStorage.from_buffer(pic.tobytes()))
-        # PIL image mode: 1, L, P, I, F, RGB, YCbCr, RGBA, CMYK
-        if pic.mode == 'YCbCr':
-            nchannel = 3
-        elif pic.mode == 'I;16':
-            nchannel = 1
-        else:
-            nchannel = len(pic.mode)
-        img = img.view(pic.size[1], pic.size[0], nchannel)
-
-        img = img.transpose(0, 1).transpose(0, 2).contiguous()
-        if isinstance(img, torch.ByteTensor):
-            return img.float()
-        else:
-            return img

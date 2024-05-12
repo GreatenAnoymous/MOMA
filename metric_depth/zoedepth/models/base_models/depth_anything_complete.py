@@ -28,8 +28,8 @@ import numpy as np
 from torchvision.transforms import Normalize
 from zoedepth.models.base_models.dpt_dinov2.dpt import DPT_DINOv2
 from zoedepth.models.base_models.depth_anything import *
-from zoedepth.models.base_models.dpt_dinov2.dpt_complete import DCM_DINOv2_Lora
-from depth_anything import DepthAnythingCore
+from zoedepth.models.base_models.dpt_dinov2.dpt_complete import DCM_DINOv2
+from .depth_anything import DepthAnythingCore
 
 class DepthCompleteCore(DepthAnythingCore):
     def __init__(self, midas, trainable=False, fetch_features=True, layer_names=('out_conv', 'l4_rn', 'r4', 'r3', 'r2', 'r1'), freeze_bn=False, keep_aspect_ratio=True,
@@ -48,15 +48,16 @@ class DepthCompleteCore(DepthAnythingCore):
         super().__init__(midas, trainable, fetch_features, layer_names, freeze_bn, keep_aspect_ratio, img_size, **kwargs)
     
     
-    def forward(self, image, raw_depth, denorm=False, return_rel_depth=False):
+    def forward(self, x, y, denorm=False, return_rel_depth=False):
         # print('input to midas:', x.shape)
         with torch.no_grad():
             if denorm:
-                x = denormalize(image)
-                y = denormalize(raw_depth)
+                x = denormalize(x)
+                y = denormalize(y)
         
-            y = self.prep(y)
+            
             x = self.prep(x)
+            y = self.prep(y)
 
         with torch.set_grad_enabled(self.trainable):
 
@@ -80,10 +81,10 @@ class DepthCompleteCore(DepthAnythingCore):
         state_dict = torch.load('./checkpoints/depth_anything_vitl14.pth', map_location='cpu')
         depth_anything.load_state_dict(state_dict)
         
+        dcm=DCM_DINOv2(depth_anything,out_channels=[256, 512, 1024, 1024], use_clstoken=False)
         kwargs.update({'keep_aspect_ratio': force_keep_ar})
         
-        depth_anything_lora=DCM_DINOv2_Lora(dinov2=depth_anything, out_channels=[256, 512, 1024, 1024], use_clstoken=False)        
-        depth_anything_core = DepthCompleteCore(depth_anything_lora, trainable=train_midas, fetch_features=fetch_features,
+        depth_anything_core = DepthCompleteCore(dcm, trainable=train_midas, fetch_features=fetch_features,
                                freeze_bn=freeze_bn, img_size=img_size, **kwargs)
 
         depth_anything_core.set_output_channels()

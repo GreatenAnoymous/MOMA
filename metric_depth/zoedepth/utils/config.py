@@ -100,12 +100,12 @@ DATASETS_CONFIG = {
         "max_depth": 2,
         "data_path": os.path.join(HOME_DIR, "nyu"),
         "gt_path": os.path.join(HOME_DIR, "nyu"),
-        "filenames_file": "./train_test_inputs/clearpose_train.txt",
-        "input_height": 480,
-        "input_width": 640,
+        "filenames_file": "./train_test_inputs/transcg_train_raw.txt",
+        "input_height": 720,
+        "input_width": 1280,
         "data_path_eval": os.path.join(HOME_DIR, "nyu"),
         "gt_path_eval": os.path.join(HOME_DIR, "nyu"),
-        "filenames_file_eval": "./train_test_inputs/clearpose_test.txt",
+        "filenames_file_eval": "./train_test_inputs/transcg_test_raw.txt",
         "min_depth_eval": 1e-3,
         "max_depth_eval": 2,
         "min_depth_diff": -10,
@@ -248,7 +248,7 @@ COMMON_TRAINING_CONFIG = {
     "translate_prob": 0.2,
     "max_translation": 100,
 
-    "validate_every": 0.25,
+    "validate_every": 0.5,
     "log_images_every": 0.1,
     "prefetch": False,
 }
@@ -372,7 +372,7 @@ def get_config(model_name, mode='train', dataset=None, **overwrite_kwargs):
     """
 
 
-    check_choices("Model", model_name, ["zoedepth", "zoedepth_nk"])
+    check_choices("Model", model_name, ["zoedepth", "zoedepth_nk", "damc"])
     check_choices("Mode", mode, ["train", "infer", "eval"])
     if mode == "train":
         check_choices("Dataset", dataset, ["nyu", "kitti", "mix", None])

@@ -102,6 +102,7 @@ class FeatureFusionBlock(nn.Module):
         Args:
             features (int): number of features
         """
+        
         super(FeatureFusionBlock, self).__init__()
 
         self.deconv = deconv
@@ -113,6 +114,7 @@ class FeatureFusionBlock(nn.Module):
         out_features = features
         if self.expand==True:
             out_features = features//2
+        
         
         self.out_conv = nn.Conv2d(features, out_features, kernel_size=1, stride=1, padding=0, bias=True, groups=1)
 
@@ -129,6 +131,7 @@ class FeatureFusionBlock(nn.Module):
         Returns:
             tensor: output
         """
+
         output = xs[0]
 
         if len(xs) == 2:
