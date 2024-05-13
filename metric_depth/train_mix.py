@@ -91,6 +91,7 @@ def main_worker(gpu, ngpus_per_node, config):
         fix_random_seed(43)
 
         config.gpu = gpu
+        config.aug=True
 
         model = build_model(config)
         
