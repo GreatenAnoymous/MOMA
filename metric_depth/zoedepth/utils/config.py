@@ -106,7 +106,7 @@ DATASETS_CONFIG = {
         "max_depth_eval": 2,
         "min_depth_diff": -10,
         "max_depth_diff": 10,
-        "do_random_rotate": False,
+        "do_random_rotate": True,
         "degree": 1.0,
         "do_kb_crop": False,
         "garg_crop": False,
