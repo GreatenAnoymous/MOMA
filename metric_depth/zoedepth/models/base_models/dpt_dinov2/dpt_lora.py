@@ -99,6 +99,7 @@ class DPT_DINOv2_Lora(nn.Module):
         self.pretrained=dinov2.pretrained
         
         self.depth_head = dinov2.depth_head
+        self.reset_parameters()
     
 
     def reset_parameters(self):

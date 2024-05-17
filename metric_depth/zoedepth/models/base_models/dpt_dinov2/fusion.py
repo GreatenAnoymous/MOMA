@@ -6,28 +6,20 @@ import torch.nn as nn
 class ConcatConv(nn.Module):
     def __init__(self, in_channels, out_channels=256):
         super(ConcatConv, self).__init__()
-        self.conv1 = nn.Conv2d(in_channels*2, out_channels, kernel_size=3, padding=1)
+        self.layers = nn.ModuleList([
+            nn.Conv2d(in_channels*2, out_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(),
+            nn.Conv2d(out_channels, in_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(in_channels),
+            nn.ReLU()
+        ])
 
-        self.conv2=nn.Conv2d(out_channels, in_channels, kernel_size=3, padding=1)
-
-        self.relu1 = nn.ReLU()
-        self.relu2= nn.ReLU()
-
-    def forward(self, x1: torch.Tensor, x2:torch.Tensor):
-    
+    def forward(self, x1: torch.Tensor, x2: torch.Tensor):
         x = torch.cat((x1.unsqueeze(1), x2.unsqueeze(1)), dim=1)  # Concatenate along the channel dimension
-
-
-        x = self.conv1(x)
-        
-        x = self.relu1(x)
-
-        x = self.conv2(x)
-
-        x = self.relu2(x)
-        
+        for layer in self.layers:
+            x = layer(x)
         return x.squeeze(1)
-
 
 
 
