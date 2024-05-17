@@ -482,22 +482,22 @@ def process_data(
         'dataset': 'nyu',
         'image': torch.FloatTensor(rgb),
         'mask': torch.BoolTensor(valid_mask),
-        'depth_raw': torch.FloatTensor(depth),
-        'depth_min': torch.tensor(depth_min),
-        'depth_max': torch.tensor(depth_max),
         'depth': torch.FloatTensor(depth_gt),
-        'depth_gt_mask': torch.BoolTensor(depth_gt_mask),
-        'scene_mask': torch.tensor(scene_mask),
-        'zero_mask': torch.BoolTensor(zero_mask),
-        'zero_mask_dilated': torch.BoolTensor(zero_mask_dilated),
-        'initial_loss_mask': torch.BoolTensor(initial_loss_mask),
-        'initial_loss_mask_dilated': torch.BoolTensor(initial_loss_mask_dilated),
-        'loss_mask': torch.BoolTensor(loss_mask),
-        'loss_mask_dilated': torch.BoolTensor(loss_mask_dilated),
-        'fx': torch.tensor(camera_intrinsics[0, 0]),
-        'fy': torch.tensor(camera_intrinsics[1, 1]),
-        'cx': torch.tensor(camera_intrinsics[0, 2]),
-        'cy': torch.tensor(camera_intrinsics[1, 2])
+        # 'depth_raw': torch.FloatTensor(depth),
+        # 'depth_min': torch.tensor(depth_min),
+        # 'depth_max': torch.tensor(depth_max),
+        # 'depth_gt_mask': torch.BoolTensor(depth_gt_mask),
+        # 'scene_mask': torch.tensor(scene_mask),
+        # 'zero_mask': torch.BoolTensor(zero_mask),
+        # 'zero_mask_dilated': torch.BoolTensor(zero_mask_dilated),
+        # 'initial_loss_mask': torch.BoolTensor(initial_loss_mask),
+        # 'initial_loss_mask_dilated': torch.BoolTensor(initial_loss_mask_dilated),
+        # 'loss_mask': torch.BoolTensor(loss_mask),
+        # 'loss_mask_dilated': torch.BoolTensor(loss_mask_dilated),
+        # 'fx': torch.tensor(camera_intrinsics[0, 0]),
+        # 'fy': torch.tensor(camera_intrinsics[1, 1]),
+        # 'cx': torch.tensor(camera_intrinsics[0, 2]),
+        # 'cy': torch.tensor(camera_intrinsics[1, 2])
     }
     # print("depth gt shape", data_dict["depth"].shape)
 
@@ -509,6 +509,35 @@ def process_data(
 
     # data_dict['depth_gt_sn'] = get_surface_normal_from_depth(data_dict['depth_gt'].unsqueeze(0), data_dict['fx'].unsqueeze(0), data_dict['fy'].unsqueeze(0), data_dict['cx'].unsqueeze(0), data_dict['cy'].unsqueeze(0)).squeeze(0)
     # print(data_dict["image"].shape, data_dict["depth"].shape)
+    return data_dict    
+
+
+
+def process_data_light(rgb,  depth_gt, depth_min, depth_max ,**kwargs):
+    """_summary_
+
+    Args:
+        rgb (_type_): _description_
+        depth_gt (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    # print(depth.shape, "waht")
+    image_size = (1280, 720)
+    
+    rgb = cv2.resize(rgb, image_size, interpolation = cv2.INTER_NEAREST)
+    depth_gt = cv2.resize(depth_gt, image_size, interpolation = cv2.INTER_NEAREST)
+    valid_mask = np.logical_and(depth_gt > depth_min, depth_gt < depth_max)
+
+    rgb = rgb.transpose(2, 0, 1)
+
+    data_dict = {
+        'dataset': 'nyu',
+        'image': torch.FloatTensor(rgb),
+        'mask': torch.BoolTensor(valid_mask),
+        'depth': torch.FloatTensor(depth_gt)
+    }
     return data_dict    
 
 
