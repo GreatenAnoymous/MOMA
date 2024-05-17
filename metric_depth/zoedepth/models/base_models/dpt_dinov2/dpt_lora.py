@@ -73,7 +73,7 @@ class DPT_DINOv2_Lora(nn.Module):
         
         
         dim = dinov2.pretrained.blocks[0].attn.qkv.in_features
-       
+    
         
         for t_layer_i, blk in enumerate(dinov2.pretrained.blocks):
             # If we only want few lora layer instead of all

@@ -35,7 +35,7 @@ import torch.nn as nn
 import torch.utils.data.distributed
 from zoedepth.utils.easydict import EasyDict as edict
 from PIL import Image, ImageOps
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, ConcatDataset
 from torchvision import transforms
 from zoedepth.utils.config import change_dataset
 from .ddad import get_ddad_loader
@@ -49,10 +49,11 @@ from .vkitti import get_vkitti_loader
 from .vkitti2 import get_vkitti2_loader
 from .dataloadpreprocess import DataLoadPreprocess
 from .preprocess import CropParams, get_white_border, get_black_border
-from .cleargrasp import get_cleargrasp_loader
-from .omniverse import get_omniverse_loader
+from .cleargrasp import get_cleargrasp_loader,ClearGraspSynthetic
+from .omniverse import get_omniverse_loader,OmniverseObject
 from .depth_complete import *
 from .data_preparation import ToTensor
+from .clearpose import ClearPoseDataset
 
 
 def preprocessing_transforms(mode, **kwargs):
@@ -73,6 +74,7 @@ class DepthDataLoader(object):
             transform (torchvision.transforms, optional): Transform to apply to the data. Defaults to None.
         """
         self.config = config
+        print("num workers", config.workers)
         if config.dataset=='depth_complete':
             if mode == 'train':
                 pin_memory = True
@@ -86,15 +88,15 @@ class DepthDataLoader(object):
             return
         if config.dataset == 'clearpose':
             if mode=="train":
-                self.data = DataLoader(DataLoadPreprocess(config, 'train', device=device, transform=preprocessing_transforms(mode, size=kwargs.get("img_size", None))), batch_size=config.batch_size, num_workers=config.workers, pin_memory=True)
+                self.data = DataLoader(ClearPoseDataset(config, 'train', device=device), batch_size=config.batch_size, num_workers=config.workers, pin_memory=False)
             else:
-                self.data = DataLoader(DataLoadPreprocess(config, 'online_eval', device=device), 1, num_workers=1, pin_memory=False)
+                self.data = DataLoader(ClearPoseDataset(config, 'online_eval', device=device), 1, num_workers=1, pin_memory=False)
             return
         if config.dataset == 'transcg':
             if mode=="train":
-                self.data = DataLoader(DataLoadPreprocess(config, 'train', device=device, transform=preprocessing_transforms(mode, size=kwargs.get("img_size", None))), batch_size=config.batch_size, num_workers=config.workers, pin_memory=True)
+                self.data = DataLoader(ClearPoseDataset(config, "train", device=device), batch_size=config.batch_size, num_workers=config.workers, pin_memory=False)
             else:
-                self.data = DataLoader(DataLoadPreprocess(config, 'online_eval', device=device), 1, num_workers=1, pin_memory=False)  
+                self.data = DataLoader(ClearPoseDataset(config, 'online_eval', device=device), 1, num_workers=1, pin_memory=False)  
             return
         if config.dataset=='cleargrasp':
             self.data= get_cleargrasp_loader(config, mode, batch_size=1, num_workers=1)
@@ -169,7 +171,7 @@ class DepthDataLoader(object):
                                    batch_size=config.batch_size,
                                    shuffle=(self.train_sampler is None),
                                    num_workers=config.workers,
-                                   pin_memory=True,
+                                   pin_memory=False,
                                    persistent_workers=True,
                                 #    prefetch_factor=2,
                                    sampler=self.train_sampler)
@@ -239,7 +241,7 @@ class RepetitiveRoundRobinDataLoader(object):
 class TransMixDataloader(object):
     def __init__(self, config, mode, device="cpu", **kwargs ) -> None:
         config=edict(config)
-        config.workers=config.workers//2
+        config.workers=config.workers
         self.config=config
         cleargrasp_conf=change_dataset(edict(config), 'cleargrasp')
         omniverse_conf=change_dataset(edict(config), 'omniverse')
@@ -247,11 +249,16 @@ class TransMixDataloader(object):
         clearpose_conf=change_dataset(edict(config), 'clearpose')
         img_size = self.config.get("img_size", None)
         if mode=="train":
-            cleargrasp_loader=DepthDataLoader(cleargrasp_conf, mode, device=device, transform=preprocessing_transforms(mode, size=img_size)).data
-            omniverse_loader=DepthDataLoader(omniverse_conf, mode, device=device, transform=preprocessing_transforms(mode, size=img_size)).data
-            transcg_loader=DepthDataLoader(transcg_conf, mode, device=device, transform=preprocessing_transforms(mode, size=img_size)).data
-            clearpose_loader=DepthDataLoader(clearpose_conf, mode, device=device, transform=preprocessing_transforms(mode, size=img_size)).data   
-            self.data=RepetitiveRoundRobinDataLoader(cleargrasp_loader, omniverse_loader, transcg_loader, clearpose_loader)
+            # cleargrasp_loader=DepthDataLoader(cleargrasp_conf, mode, device=device, transform=preprocessing_transforms(mode, size=img_size)).data
+            # omniverse_loader=DepthDataLoader(omniverse_conf, mode, device=device, transform=preprocessing_transforms(mode, size=img_size)).data
+            # transcg_loader=DepthDataLoader(transcg_conf, mode, device=device, transform=preprocessing_transforms(mode, size=img_size)).data
+            # clearpose_loader=DepthDataLoader(clearpose_conf, mode, device=device, transform=preprocessing_transforms(mode, size=img_size)).data   
+            # self.data=RepetitiveRoundRobinDataLoader(  transcg_loader, clearpose_loader,cleargrasp_loader,omniverse_loader)
+            cleargrasp_data=ClearGraspSynthetic(cleargrasp_conf.data_root, split='train',**cleargrasp_conf)
+            omniverse_data=OmniverseObject(omniverse_conf.data_root, split='train',**omniverse_conf)
+            transcg_data=ClearPoseDataset(transcg_conf, 'train', device=device)
+            clearpose_data=ClearPoseDataset(clearpose_conf, 'train', device=device)
+            self.data=DataLoader(ConcatDataset([cleargrasp_data, omniverse_data, transcg_data, clearpose_data]), batch_size=config.batch_size, shuffle=True, num_workers=config.workers, pin_memory=False)
         else:
             self.data=DepthDataLoader(transcg_conf, mode, device=device).data
 

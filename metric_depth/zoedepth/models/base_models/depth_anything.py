@@ -190,7 +190,7 @@ class PrepForMidas(object):
 
 
 class DepthAnythingCore(nn.Module):
-    def __init__(self, midas, trainable=False, fetch_features=True, layer_names=('out_conv', 'l4_rn', 'r4', 'r3', 'r2', 'r1'), freeze_bn=False, keep_aspect_ratio=True,
+    def __init__(self, midas, trainable=True, fetch_features=True, layer_names=('out_conv', 'l4_rn', 'r4', 'r3', 'r2', 'r1'), freeze_bn=False, keep_aspect_ratio=True,
                  img_size=384, **kwargs):
         """Midas Base model used for multi-scale feature extraction.
 
@@ -214,8 +214,8 @@ class DepthAnythingCore(nn.Module):
         # self.layer_names = ['out_conv','l4_rn', 'r4', 'r3', 'r2', 'r1']
         self.layer_names = layer_names
         print("depth anything trainable", trainable)
-        if trainable:
-            self.set_trainable(trainable)
+        # if trainable:
+            # self.set_trainable(trainable)
         self.set_fetch_features(fetch_features)
 
         self.prep = PrepForMidas(keep_aspect_ratio=keep_aspect_ratio,

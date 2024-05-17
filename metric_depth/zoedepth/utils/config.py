@@ -165,7 +165,7 @@ DATASETS_CONFIG = {
         "max_depth_eval": 2,
         "min_depth": 1e-3,
         "max_depth": 2,
-        "data_root": "/mnt/ssd_990/teng/BinPicking/DPT_transparent_objects/metric_depth/data/nyu/omniverse_v3/train/20200904"
+        "data_root": "/mnt/ssd_990/teng/BinPicking/DPT_transparent_objects/metric_depth/data/nyu/omniverse_v3/train/20200910"
     },
 
     "cleargrasp":{

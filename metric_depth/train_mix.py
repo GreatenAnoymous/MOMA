@@ -30,6 +30,8 @@ from zoedepth.models.builder import build_model
 from zoedepth.data.data_mono import MixedNYUKITTI, TransMixDataloader
 import torch.utils.data.distributed
 import torch.multiprocessing as mp
+# torch.multiprocessing.set_sharing_strategy('file_system')
+
 import torch
 import numpy as np
 from pprint import pprint

@@ -31,6 +31,7 @@ class DataLoadPreprocess(Dataset):
         self.transform = transform
         self.to_tensor = ToTensor(mode)
         self.is_for_online_eval = is_for_online_eval
+
         if config.use_shared_dict:
             self.reader = CachedReader(config.shared_dict)
         else:

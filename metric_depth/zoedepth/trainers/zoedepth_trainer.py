@@ -107,6 +107,8 @@ class Trainer(BaseTrainer):
     
     @torch.no_grad()
     def eval_infer(self, x):
+        if x.shape[1]>3:
+            x=x.permute(0,3,1,2)
         with amp.autocast(enabled=self.config.use_amp):
             m = self.model.module if self.config.multigpu else self.model
             pred_depths = m(x)['metric_depth']
@@ -150,9 +152,11 @@ class Trainer(BaseTrainer):
     def validate_on_batch(self, batch, val_step):
         # print(batch["image"].shape, batch["depth"].shape, batch["mask"].shape)
         images = batch['image'].to(self.device)
+        
         depths_gt = batch['depth'].to(self.device)
         dataset = batch['dataset'][0]
         mask = batch["mask"].to(self.device)
+    
         if 'has_valid_depth' in batch:
             if not batch['has_valid_depth']:
                 # print("no valid depth")
@@ -177,7 +181,7 @@ class Trainer(BaseTrainer):
 
         if val_step == 1 and self.should_log:
             depths_gt[torch.logical_not(mask)] = -99
-            print("predicted depth shape", pred_depths[0].shape, pred_depths[0].max(), pred_depths[0].min(), pred_depths[0])
+        
             self.log_images(rgb={"Input": images[0]}, depth={"GT": depths_gt[0], "PredictedMono": pred_depths[0]}, prefix="Test",
                             min_depth=DATASETS_CONFIG[dataset]['min_depth'], max_depth=DATASETS_CONFIG[dataset]['max_depth'])
 
