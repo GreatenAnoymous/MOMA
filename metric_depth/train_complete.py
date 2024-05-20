@@ -224,7 +224,7 @@ def main_worker(gpu, ngpus_per_node, config):
         fix_random_seed(seed)
 
         config.gpu = gpu
-        config.train_midas=False
+        config.train_midas=True
 
         model = build_model(config)
 

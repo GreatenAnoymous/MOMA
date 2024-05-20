@@ -265,12 +265,12 @@ class DepthAnythingCore(nn.Module):
             if denorm:
                 x = denormalize(x)
             x = self.prep(x)
-        with torch.set_grad_enabled(self.trainable):
+        # with torch.set_grad_enabled(self.trainable):
 
-            rel_depth = self.core(x)
-            if not self.fetch_features:
-            
-                return rel_depth
+        rel_depth = self.core(x)
+        if not self.fetch_features:
+        
+            return rel_depth
         
         out = [self.core_out[k] for k in self.layer_names]
 

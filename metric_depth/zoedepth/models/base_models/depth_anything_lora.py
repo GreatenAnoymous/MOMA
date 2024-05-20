@@ -32,7 +32,7 @@ from zoedepth.models.base_models.dpt_dinov2.dpt_lora import DPT_DINOv2_Lora
 from .depth_anything import DepthAnythingCore
 
 class DepthAnythingLoraCore(DepthAnythingCore):
-    def __init__(self, midas, trainable=False, fetch_features=True, layer_names=('out_conv', 'l4_rn', 'r4', 'r3', 'r2', 'r1'), freeze_bn=False, keep_aspect_ratio=True,
+    def __init__(self, midas, trainable=True, fetch_features=True, layer_names=('out_conv', 'l4_rn', 'r4', 'r3', 'r2', 'r1'), freeze_bn=False, keep_aspect_ratio=True,
                  img_size=384, **kwargs):
         """Midas Base model used for multi-scale feature extraction.
 
