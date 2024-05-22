@@ -335,7 +335,7 @@ def process_data(
     scene_type = "cluttered", 
     camera_type = 0, 
     split = 'train', 
-    image_size = (1280, 720), 
+    image_size = (640, 480), 
     depth_min = 0.3, 
     depth_max = 1.5,
     depth_norm = 10,
