@@ -71,7 +71,6 @@ class DCM_DINOv2(DPT_DINOv2):
         features_y = self.pretrained.get_intermediate_layers(y, 4, return_class_token=True)
         features=[]
         for i in range(4):
-
             fused_i = self.fusionnet[i](features_x[i][0], features_y[i][0])
             features.append([fused_i,1])
         patch_h, patch_w = h // 14, w // 14

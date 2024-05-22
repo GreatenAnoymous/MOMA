@@ -153,7 +153,9 @@ class DPT_DINOv2(nn.Module):
         patch_h, patch_w = h // 14, w // 14
 
         depth = self.depth_head(features, patch_h, patch_w)
+        
         depth = F.interpolate(depth, size=(h, w), mode="bilinear", align_corners=True)
+        
         depth = F.relu(depth)
 
         return depth.squeeze(1)
