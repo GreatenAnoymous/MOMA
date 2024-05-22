@@ -181,61 +181,61 @@ class BaseTrainer:
             pbar = tqdm(enumerate(self.train_loader), desc=f"Epoch: {epoch + 1}/{self.config.epochs}. Loop: Train",
                         total=self.iters_per_epoch) if is_rank_zero(self.config) else enumerate(self.train_loader)
             for i, batch in pbar:
-                # try:
-                if self.should_early_stop():
-                    print("Early stopping")
-                    break
-                # print(f"Batch {self.step+1} on rank {self.config.rank}")
-                losses = self.train_on_batch(batch, i)
-                # print(f"trained batch {self.step+1} on rank {self.config.rank}")
+                try:
+                    if self.should_early_stop():
+                        print("Early stopping")
+                        break
+                    # print(f"Batch {self.step+1} on rank {self.config.rank}")
+                    losses = self.train_on_batch(batch, i)
+                    # print(f"trained batch {self.step+1} on rank {self.config.rank}")
 
-                self.raise_if_nan(losses)
-                if is_rank_zero(self.config) and self.config.print_losses:
-                    pbar.set_description(
-                        f"Epoch: {epoch + 1}/{self.config.epochs}. Loop: Train. Losses: {stringify_losses(losses)}")
-                self.scheduler.step()
+                    self.raise_if_nan(losses)
+                    if is_rank_zero(self.config) and self.config.print_losses:
+                        pbar.set_description(
+                            f"Epoch: {epoch + 1}/{self.config.epochs}. Loop: Train. Losses: {stringify_losses(losses)}")
+                    self.scheduler.step()
 
-                if self.should_log and self.step % 50 == 0:
-                    wandb.log({f"Train/{name}": loss.item()
-                            for name, loss in losses.items()}, step=self.step)
-            
+                    if self.should_log and self.step % 50 == 0:
+                        wandb.log({f"Train/{name}": loss.item()
+                                for name, loss in losses.items()}, step=self.step)
+                
 
-                self.step += 1
+                    self.step += 1
 
-                ########################################################################################################
+                    ########################################################################################################
 
-                if self.test_loader:
-                    if (self.step % validate_every) == 0:
-                        self.model.eval()
-                        # if self.should_write:
-                        #     self.save_checkpoint(
-                        #         f"{self.config.experiment_id}_latest.pt")
+                    if self.test_loader:
+                        if (self.step % validate_every) == 0:
+                            self.model.eval()
+                            # if self.should_write:
+                            #     self.save_checkpoint(
+                            #         f"{self.config.experiment_id}_latest.pt")
 
-                        ################################# Validation loop ##################################################
-                        # validate on the entire validation set in every process but save only from rank 0, I know, inefficient, but avoids divergence of processes
-                        metrics, test_losses = self.validate()
-                        assert test_losses is not None
-                        print("Validated: {}".format(metrics))
-                        if self.should_log:
-                            wandb.log(
-                                {f"Test/{name}": tloss for name, tloss in test_losses.items()}, step=self.step)
+                            ################################# Validation loop ##################################################
+                            # validate on the entire validation set in every process but save only from rank 0, I know, inefficient, but avoids divergence of processes
+                            metrics, test_losses = self.validate()
+                            assert test_losses is not None
+                            print("Validated: {}".format(metrics))
+                            if self.should_log:
+                                wandb.log(
+                                    {f"Test/{name}": tloss for name, tloss in test_losses.items()}, step=self.step)
 
-                            wandb.log({f"Metrics/{k}": v for k,
-                                    v in metrics.items()}, step=self.step)
+                                wandb.log({f"Metrics/{k}": v for k,
+                                        v in metrics.items()}, step=self.step)
 
-                            if (metrics[self.metric_criterion] < best_loss) and self.should_write:
-                                self.save_checkpoint(
-                                    f"{self.config.experiment_id}_best.pt")
-                                best_loss = metrics[self.metric_criterion]
+                                if (metrics[self.metric_criterion] < best_loss) and self.should_write:
+                                    self.save_checkpoint(
+                                        f"{self.config.experiment_id}_best.pt")
+                                    best_loss = metrics[self.metric_criterion]
 
-                        self.model.train()
+                            self.model.train()
 
-                        if self.config.distributed:
-                            dist.barrier()
-                # except Exception as e:
-                #     print(f"Error: {e}")
-                # except:
-                #     print("Unknown error")
+                            if self.config.distributed:
+                                dist.barrier()
+                except Exception as e:
+                    print(f"Error: {e}")
+                except:
+                    print("Unknown error")
 
                         
                         # print(f"Validated: {metrics} on device {self.config.rank}")
