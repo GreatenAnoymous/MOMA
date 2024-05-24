@@ -268,7 +268,7 @@ def process_depth(
     depth_std = None,
     depth_coeff = 10.0, 
     return_mu_std = False,
-    inpainting = False
+    inpainting = True
 ):
     """
     Process the depth information, including scaling, normalization and clear NaN values.
@@ -476,14 +476,15 @@ def process_data(
         depth_max = depth.max() + 0.5 * depth.std() + 1e-6
         depth = (depth - depth_min) / (depth_max - depth_min)
         
-    
+    if depth_gt_mask is not None:
+        valid_mask=depth_gt_mask
 
     data_dict = {
         'dataset': 'nyu',
         'image': torch.FloatTensor(rgb),
         'mask': torch.BoolTensor(valid_mask),
         'depth': torch.FloatTensor(depth_gt),
-        # 'depth_raw': torch.FloatTensor(depth),
+        'depth_raw': torch.FloatTensor(depth),
         # 'depth_min': torch.tensor(depth_min),
         # 'depth_max': torch.tensor(depth_max),
         # 'depth_gt_mask': torch.BoolTensor(depth_gt_mask),
@@ -513,7 +514,7 @@ def process_data(
 
 
 
-def process_data_light(rgb,  depth_gt, depth_min, depth_max ,**kwargs):
+def process_data_light(rgb,  depth_gt, depth_min, depth_max, depth_raw=None, depth_gt_mask=None ,**kwargs):
     """_summary_
 
     Args:
@@ -524,19 +525,23 @@ def process_data_light(rgb,  depth_gt, depth_min, depth_max ,**kwargs):
         _type_: _description_
     """
     # print(depth.shape, "waht")
-    image_size = (1280, 720)
+    image_size = (640, 480)
     
     rgb = cv2.resize(rgb, image_size, interpolation = cv2.INTER_NEAREST)
     depth_gt = cv2.resize(depth_gt, image_size, interpolation = cv2.INTER_NEAREST)
-    valid_mask = np.logical_and(depth_gt > depth_min, depth_gt < depth_max)
+    if depth_raw is None:
+        depth_raw=depth_gt
+        depth_gt_mask=np.ones_like(depth_gt)
+
 
     rgb = rgb.transpose(2, 0, 1)
 
     data_dict = {
         'dataset': 'nyu',
         'image': torch.FloatTensor(rgb),
-        'mask': torch.BoolTensor(valid_mask),
-        'depth': torch.FloatTensor(depth_gt)
+        'mask': torch.BoolTensor(depth_gt_mask),
+        'depth': torch.FloatTensor(depth_gt),
+        "depth_raw": torch.FloatTensor(depth_raw),
     }
     return data_dict    
 

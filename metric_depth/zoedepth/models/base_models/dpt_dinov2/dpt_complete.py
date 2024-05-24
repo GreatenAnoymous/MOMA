@@ -8,7 +8,7 @@ import torch
 import numpy as np
 import torch.nn as nn
 
-from .fusion import ConcatConv, AFF
+from .fusion import ConcatConv, TwoWayAttentionBlock
 from .blocks import FeatureFusionBlock, _make_scratch
 import torch.nn.functional as F
 
@@ -53,7 +53,7 @@ class DCM_DINOv2(DPT_DINOv2):
         self.pretrained=dinov2.pretrained
         self.depth_head=dinov2.depth_head
         self.fusionnet=nn.ModuleList([ConcatConv(in_channels=1) for i in range(4)]) 
-        
+        # self.fusionnet=nn.ModuleList([TwoWayAttentionBlock(1024, 4, mlp_dim=256) for i in range(4)])
 
     
     def forward(self, x, y):

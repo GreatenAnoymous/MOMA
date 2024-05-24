@@ -5,7 +5,7 @@ import math
 
 
 class ConcatConv(nn.Module):
-    def __init__(self, in_channels, out_channels=256):
+    def __init__(self, in_channels, out_channels=512):
         super(ConcatConv, self).__init__()
         self.layers = nn.ModuleList([
             nn.Conv2d(in_channels*2, out_channels, kernel_size=3, padding=1),
@@ -216,7 +216,7 @@ class TwoWayAttentionBlock(nn.Module):
         queries = self.norm1(queries)
 
         # Cross attention block, tokens attending to image embedding
-        if q is None or k is None:
+        if query_pe is None or key_pe is None:
             q=queries
             k=keys
         else:
@@ -232,7 +232,7 @@ class TwoWayAttentionBlock(nn.Module):
         queries = self.norm3(queries)
 
         # Cross attention block, image embedding attending to tokens
-        if q is None or k is None:
+        if query_pe is None or key_pe is None:
             q=queries
             k=keys
         else:

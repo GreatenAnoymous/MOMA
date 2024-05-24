@@ -33,6 +33,14 @@ class DepthCompleteData(Dataset):
         self.mode=mode
         self.transform = transform
         self.is_for_online_eval = is_for_online_eval
+        
+    
+    def normalize_depth(self, depth, depth_mu,depth_std):
+        depth_min = depth.min() - 0.5 * depth_std - 1e-6
+        depth_max = depth.max() + 0.5 * depth_std + 1e-6
+        depth = (depth - depth_min) / (depth_max - depth_min)
+        return depth
+        
 
 
     def postprocess(self, sample):
@@ -64,19 +72,18 @@ class DepthCompleteData(Dataset):
             depth_raw = np.asarray(depth_raw, dtype=np.float32)
             depth_gt = depth_gt / 1000.0
             depth_raw = depth_raw / 1000.0
-      
+            
+            
+    
 
-            depth_gt = process_depth(depth_gt)
-            depth_raw = process_depth(depth_raw)
+            depth_gt, depth_mu_gt, detph_std_gt = process_depth(depth_gt, return_mu_std=True)
+            depth_raw, depth_mu_raw, detph_std_raw = process_depth(depth_raw, return_mu_std=True)
+            
+            depth_gt = self.normalize_depth(depth_gt, depth_mu_gt, detph_std_gt)
+            depth_raw = self.normalize_depth(depth_raw, depth_mu_raw, detph_std_raw)
 
             depth_gt = np.expand_dims(depth_gt, axis=2)
             depth_raw = np.expand_dims(depth_raw, axis=2)
-            
-  
-            
-                
-            
-                
             image, depth_gt, depth_raw = self.train_preprocess(image, depth_gt, depth_raw)
             mask = np.logical_and(depth_gt > self.config.min_depth,
                                   depth_gt < self.config.max_depth).squeeze()[None, ...]
@@ -117,8 +124,12 @@ class DepthCompleteData(Dataset):
                     depth_raw = np.asarray(depth_raw, dtype=np.float32)
                     depth_gt = depth_gt / 1000.0
                     depth_raw = depth_raw / 1000.0
-                    depth_raw=process_depth(depth_raw)
-                    depth_gt = process_depth(depth_gt)
+                    depth_gt, depth_mu_gt, detph_std_gt = process_depth(depth_gt, return_mu_std=True)
+                    depth_raw, depth_mu_raw, detph_std_raw = process_depth(depth_raw, return_mu_std=True)
+                    
+                    depth_gt = self.normalize_depth(depth_gt, depth_mu_gt, detph_std_gt)
+                    depth_raw = self.normalize_depth(depth_raw, depth_mu_raw, detph_std_raw)
+                    
 
                     
                     depth_gt = np.expand_dims(depth_gt, axis=2)

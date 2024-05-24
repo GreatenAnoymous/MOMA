@@ -233,6 +233,7 @@ class BaseTrainer:
                             if self.config.distributed:
                                 dist.barrier()
                 except Exception as e:
+                    # raise e
                     print(f"Error: {e}")
                 except:
                     print("Unknown error")

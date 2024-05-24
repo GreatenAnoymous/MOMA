@@ -107,7 +107,7 @@ class DepthCompleteTrainer(Trainer):
             
             
             self.log_images(rgb={"Input": images[0, ...]}, depth={"GT": depths_gt[0], "PredictedMono": pred[0]}, prefix="Train",
-                            min_depth=torch.min(pred_depths[0]).item(), max_depth=torch.max(pred_depths[0]).item())
+                            min_depth=0, max_depth=1)
 
             if self.config.get("log_rel", False):
                 self.log_images(
@@ -130,7 +130,6 @@ class DepthCompleteTrainer(Trainer):
 
 
     def validate_on_batch(self, batch, val_step):
-        # print(batch["image"].shape, batch["depth"].shape, batch["mask"].shape)
         images = batch['image'].to(self.device)
         depths_gt = batch['depth'].to(self.device)
         depths_raw=batch["depth_raw"].to(self.device)
@@ -143,9 +142,6 @@ class DepthCompleteTrainer(Trainer):
         images=images.permute(0,3,1,2)
         depths_raw=depths_raw.permute(0,3,1,2)
         depths_gt=depths_gt.permute(0,3,1,2)
-     
-
-
         if dataset == 'nyu':
             pred_depths = self.crop_aware_infer(images)
         else:
@@ -170,7 +166,7 @@ class DepthCompleteTrainer(Trainer):
             
             # print("predicted depth shape", pred_depths[0].shape, pred_depths[0].max(), pred_depths[0].min(), pred_depths[0])
             self.log_images(rgb={"Input": images[0]}, depth={"GT": depths_gt[0], "PredictedMono": pred_depths[0]}, prefix="Test",
-                            min_depth=torch.min(pred_depths[0]).item(), max_depth=torch.max(pred_depths[0]).item())
+                            min_depth=0, max_depth=1)
 
         return metrics, losses
 
@@ -281,6 +277,7 @@ if __name__ == '__main__':
     config.dataset="depth_complete"
     config.batch_size = config.bs
     config.mode = 'train'
+    config.max_depth=1
     if config.root != "." and not os.path.isdir(config.root):
         os.makedirs(config.root)
 
