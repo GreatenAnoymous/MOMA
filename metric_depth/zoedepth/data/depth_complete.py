@@ -36,8 +36,12 @@ class DepthCompleteData(Dataset):
         
     
     def normalize_depth(self, depth, depth_mu,depth_std):
-        depth_min = depth.min() - 0.5 * depth_std - 1e-6
-        depth_max = depth.max() + 0.5 * depth_std + 1e-6
+        if np.any(depth > 0)==False:
+            print(depth.shape, depth.min(), depth.max(), depth_mu, depth_std)
+            raise ValueError("Depth is all zeros")
+
+        depth_min = depth[depth>0].min() - 0.5 * depth_std - 1e-6
+        depth_max = depth[depth>0].max() + 0.5 * depth_std + 1e-6
         depth = (depth - depth_min) / (depth_max - depth_min)
         return depth
         

@@ -54,14 +54,14 @@ class DepthAnythingLoraCore(DepthAnythingCore):
             kwargs = DepthAnythingCore.parse_img_size(kwargs)
         img_size = kwargs.pop("img_size", [384, 384])
         
-        depth_anything = DPT_DINOv2(out_channels=[256, 512, 1024, 1024], use_clstoken=False)
+        depth_anything = DPT_DINOv2(out_channels=[96, 192, 384, 768], use_clstoken=False)
         
-        state_dict = torch.load('./checkpoints/depth_anything_vitl14.pth', map_location='cpu')
+        state_dict = torch.load('./checkpoints/depth_anything_vitb14.pth', map_location='cpu')
         depth_anything.load_state_dict(state_dict)
         
         kwargs.update({'keep_aspect_ratio': force_keep_ar})
         
-        depth_anything_lora=DPT_DINOv2_Lora(dinov2=depth_anything, out_channels=[256, 512, 1024, 1024], use_clstoken=False)        
+        depth_anything_lora=DPT_DINOv2_Lora(dinov2=depth_anything, out_channels=[96, 192, 384, 768], use_clstoken=False)        
         depth_anything_core = DepthAnythingLoraCore(depth_anything_lora, trainable=train_midas, fetch_features=fetch_features,
                                freeze_bn=freeze_bn, img_size=img_size, **kwargs)
 

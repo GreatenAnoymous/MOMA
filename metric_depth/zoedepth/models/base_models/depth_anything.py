@@ -330,7 +330,8 @@ class DepthAnythingCore(nn.Module):
         self.remove_hooks()
 
     def set_output_channels(self):
-        self.output_channels = [256, 256, 256, 256, 256]
+        # self.output_channels = [256, 256, 256, 256, 256]
+        self.output_channels = [128,128,128,128,128]
 
     @staticmethod
     def build(midas_model_type="dinov2_large", train_midas=False, use_pretrained_midas=True, fetch_features=False, freeze_bn=True, force_keep_ar=False, force_reload=False, **kwargs):
@@ -338,9 +339,9 @@ class DepthAnythingCore(nn.Module):
             kwargs = DepthAnythingCore.parse_img_size(kwargs)
         img_size = kwargs.pop("img_size", [384, 384])
         
-        depth_anything = DPT_DINOv2(out_channels=[256, 512, 1024, 1024], use_clstoken=False)
+        depth_anything = DPT_DINOv2(out_channels=[96, 192, 384, 768], use_clstoken=False)
         
-        state_dict = torch.load('./checkpoints/depth_anything_vitl14.pth', map_location='cpu')
+        state_dict = torch.load('./checkpoints/depth_anything_vitb14.pth', map_location='cpu')
         depth_anything.load_state_dict(state_dict)
         
         kwargs.update({'keep_aspect_ratio': force_keep_ar})

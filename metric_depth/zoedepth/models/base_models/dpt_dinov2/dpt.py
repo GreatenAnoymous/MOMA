@@ -18,7 +18,7 @@ def _make_fusion_block(features, use_bn, size = None):
 
 
 class DPTHead(nn.Module):
-    def __init__(self, in_channels, features=256, use_bn=False, out_channels=[256, 512, 1024, 1024], use_clstoken=False):
+    def __init__(self, in_channels, features=128, use_bn=False, out_channels=[96, 192, 384, 768], use_clstoken=False):
         super(DPTHead, self).__init__()
         
         self.use_clstoken = use_clstoken
@@ -133,7 +133,7 @@ class DPTHead(nn.Module):
 
 
 class DPT_DINOv2(nn.Module):
-    def __init__(self, encoder='vitl', features=256, use_bn=False, out_channels=[256, 512, 1024, 1024], use_clstoken=False):
+    def __init__(self, encoder='vitb', features=128, use_bn=False, out_channels=[96, 192, 384, 768], use_clstoken=False):
 
         super(DPT_DINOv2, self).__init__()
 

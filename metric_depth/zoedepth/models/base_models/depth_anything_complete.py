@@ -76,12 +76,12 @@ class DepthCompleteCore(DepthAnythingCore):
             kwargs = DepthAnythingCore.parse_img_size(kwargs)
         img_size = kwargs.pop("img_size", [384, 384])
         
-        depth_anything = DPT_DINOv2(out_channels=[256, 512, 1024, 1024], use_clstoken=False)
+        depth_anything = DPT_DINOv2(out_channels=[96, 192, 384, 768], use_clstoken=False)
         
-        state_dict = torch.load('./checkpoints/depth_anything_vitl14.pth', map_location='cpu')
+        state_dict = torch.load('./checkpoints/depth_anything_vitb14.pth', map_location='cpu')
         depth_anything.load_state_dict(state_dict)
         
-        dcm=DCM_DINOv2(depth_anything,out_channels=[256, 512, 1024, 1024], use_clstoken=False)
+        dcm=DCM_DINOv2(depth_anything,out_channels=[96, 192, 384, 768], use_clstoken=False)
         kwargs.update({'keep_aspect_ratio': force_keep_ar})
         
         depth_anything_core = DepthCompleteCore(dcm, trainable=train_midas, fetch_features=fetch_features,
