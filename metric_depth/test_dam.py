@@ -246,11 +246,11 @@ class DAM(object):
  
         
     
-    def predictDepth(self, image, depth=None, object_mask=None , DEVICE="cuda"):
+    def predictDepth(self, image, depth=None, object_mask=None ,  depth_raw=None,DEVICE="cuda"):
         if object_mask is not None:
             object_mask=np.array(object_mask)
             object_mask=object_mask>0
-        checkpoint="./depth_anything_finetune/transcg_dam.pt"
+        checkpoint="./depth_anything_finetune/mixed.pt"
         # checkpoint="./checkpoints/depth_anything_metric_depth_indoor.pt"
         config=get_config("zoedepth", "train", "nyu")
         depth_anything = build_model(config)
@@ -264,18 +264,19 @@ class DAM(object):
         depth_numpy = depth_anything.infer_pil(image)  # as numpy
         
         # print(depth_numpy)
+        
 
-        if depth is not None:
-            depth=np.array(depth)
-            depth[np.isnan(depth)] = 0
-            mask = np.logical_and((depth> 0),(depth<1))
-            if object_mask is not None:
-                mask=mask & object_mask[:,:,0]
+        if depth_raw is not None:
+            depth_raw=np.array(depth_raw)
+            depth_raw[np.isnan(depth_raw)] = 0
+            mask = np.logical_and((depth_raw> 0),(depth_raw<1))
+            # if object_mask is not None:
+            #     mask=mask & object_mask[:,:,0]
             
                     
             # Flatten the depth_numpy and depth arrays
             depth_numpy_flat = depth_numpy[mask].flatten()
-            depth_flat = depth[mask].flatten()
+            depth_flat = depth_raw[mask].flatten()
 
             # Fit a linear function to the data
             coefficients = np.polyfit(depth_numpy_flat, depth_flat, 1)
@@ -288,12 +289,12 @@ class DAM(object):
             # print(slope,"slope", intercept, "intercept")
             scaled_fitted_depths = depth_numpy * slope + intercept
             
-            nonzero_indices = np.nonzero(depth)
-            nonzero_indices = np.nonzero(depth)
+            nonzero_indices = np.nonzero(depth_raw)
+            nonzero_indices = np.nonzero(depth_raw)
             x_data = nonzero_indices[0]
             y_data = nonzero_indices[1]
             z_data = depth_numpy[nonzero_indices]
-            zt_data = depth[nonzero_indices]
+            zt_data = depth_raw[nonzero_indices]
             # x_data = nonzero_indices[0]
             # y_data = nonzero_indices[1]
             # z_data = depth_numpy[nonzero_indices]
@@ -305,7 +306,7 @@ class DAM(object):
             # xc_opt, yc_opt,  d_opt, lambda1_opt, lambda2_opt, lambda3_opt =[-12876.598818650644, 3879.3807488025254, 0.09036849843330247, 1.7720131641397066e-05, 7.030278082064835e-05, 0.4987274794212721]
             xc_opt, yc_opt,  d_opt, lambda1_opt, lambda2_opt, lambda3_opt = popt
 
-            fitted_depths=np.zeros_like(depth)
+            fitted_depths=np.zeros_like(depth_raw)
             for i in range(depth.shape[0]):
                 for j in range(depth.shape[1]):
                     fitted_depths[i,j]=model_function((i,j,depth_numpy[i,j]), xc_opt, yc_opt,  d_opt, lambda1_opt, lambda2_opt, lambda3_opt)
@@ -313,13 +314,24 @@ class DAM(object):
             # print(depth_numpy.shape, depth.shape, torch.tensor(mask).unsqueeze(0).unsqueeze(0).shape)
             print([xc_opt, yc_opt, d_opt, lambda1_opt, lambda2_opt, lambda3_opt])
             # # Calculate absolute differences between original and fitted depth maps
-            absolute_diff = np.abs(depth[mask] - fitted_depths[mask])
-            print(fitted_depths[mask])
+            
+            gt_mask= np.logical_and(depth>0, depth<1)
+            # print(object_mask[:,:,0].min(), object_mask[:,:,0].max())
+            num_nonzero = np.count_nonzero(gt_mask)
+            # print("Number of Nonzero Values in object_mask:", num_nonzero)
+
+        
+            gt_mask=np.logical_and(gt_mask, object_mask[:,:,0])
+            num_nonzero = np.count_nonzero(gt_mask)
+            print("Number of Nonzero Values in object_mask:", num_nonzero)
+
+            metrics=compute_errors(depth[gt_mask], fitted_depths[gt_mask])
+            absolute_diff = np.abs(depth[gt_mask] - fitted_depths[gt_mask])
+
 
             # # Calculate mean absolute error
             mean_absolute_error = np.mean(absolute_diff)
-
-            metrics=compute_errors(depth[mask], fitted_depths[mask])
+            
             print(metrics)
 
             print("Mean Absolute Error (MAE):", mean_absolute_error)
@@ -353,34 +365,34 @@ class DAM(object):
             plt.savefig('rgb.png')
             plt.close()
 
-            print(depth.shape)
-            w,h=depth.shape[0], depth.shape[1]
-            depth_gt_1d=depth.flatten()
-            depth_1d=depth_numpy.flatten()
-            valid=depth_gt_1d>0
-            depth_gt_1d=depth_gt_1d[valid]
-            depth_1d=depth_1d[valid]
-            u,v=np.meshgrid(np.arange(h), np.arange(w))
-            u=u.flatten()
-            v=v.flatten()
-            u=u[valid]
-            v=v[valid]  
-            indices = np.random.choice(len(depth_1d), size=50, replace=False)
-            u_selected = u[indices]
-            v_selected = v[indices]
-            depth_gt_1d_selected = depth_gt_1d[indices]
-            depth_1d_selected = depth_1d[indices]
-            beta=compute_local_alignment(u_selected, v_selected, depth_1d_selected, depth_gt_1d_selected, w, h)
-            print(beta.shape)
-            # expanded_depth = np.expand_dims(depth, axis=-1)
+            # print(depth.shape)
+            # w,h=depth.shape[0], depth.shape[1]
+            # depth_gt_1d=depth.flatten()
+            # depth_1d=depth_numpy.flatten()
+            # valid=depth_gt_1d>0
+            # depth_gt_1d=depth_gt_1d[valid]
+            # depth_1d=depth_1d[valid]
+            # u,v=np.meshgrid(np.arange(h), np.arange(w))
+            # u=u.flatten()
+            # v=v.flatten()
+            # u=u[valid]
+            # v=v[valid]  
+            # indices = np.random.choice(len(depth_1d), size=50, replace=False)
+            # u_selected = u[indices]
+            # v_selected = v[indices]
+            # depth_gt_1d_selected = depth_gt_1d[indices]
+            # depth_1d_selected = depth_1d[indices]
+            # beta=compute_local_alignment(u_selected, v_selected, depth_1d_selected, depth_gt_1d_selected, w, h)
+            # print(beta.shape)
+            # # expanded_depth = np.expand_dims(depth, axis=-1)
 
-            # Perform the element-wise multiplication and addition
-            recovered_depth = beta[..., 0, 0] * depth_numpy + beta[..., 1, 0]
+            # # Perform the element-wise multiplication and addition
+            # recovered_depth = beta[..., 0, 0] * depth_numpy + beta[..., 1, 0]
             
-            plt.imshow(recovered_depth.reshape(w,h), cmap='jet',vmin=0, vmax=1.5)
-            plt.colorbar()
-            plt.savefig('depth_recovered.png')
-            plt.close()
+            # plt.imshow(recovered_depth.reshape(w,h), cmap='jet',vmin=0, vmax=1.5)
+            # plt.colorbar()
+            # plt.savefig('depth_recovered.png')
+            # plt.close()
 
 
 
@@ -443,9 +455,10 @@ def generate_fake_depth(input_folder, output_folder):
 
     
 dam =DAM()
-depth=exr_loader("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000089-opaque-depth-img.exr", ndim = 1, ndim_representation = ['R'])
-image = cv2.imread("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000089-transparent-rgb-img.jpg")
-mask_image=cv2.imread("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000089-mask.png")
+depth=exr_loader("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000019-opaque-depth-img.exr", ndim = 1, ndim_representation = ['R'])
+depth_raw=exr_loader("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000019-transparent-depth-img.exr", ndim = 1, ndim_representation = ['R'])
+image = cv2.imread("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000019-transparent-rgb-img.jpg")
+mask_image=cv2.imread("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000019-mask.png")
 
 
 
@@ -461,7 +474,7 @@ mask_image=cv2.imread("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d4
 
 scale=1
 # # depth=dam.testDAM(image, depth/scale)
-dam.predictDepth(image, depth/scale,object_mask=mask_image)
+dam.predictDepth(image, depth/scale,object_mask=mask_image, depth_raw=depth_raw/scale)
 # # dam.dump_to_pointcloud(image)
 
 # # generate_fake_depth("/common/home/gt286/BinPicking/objet_dataset/object_dataset_6/", "./fakedepth/")

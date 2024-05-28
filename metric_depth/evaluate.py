@@ -129,8 +129,8 @@ def eval_model(model_name, pretrained_resource, dataset='nyu', **kwargs):
     # Load default pretrained resource defined in config if not set
     overwrite = {**kwargs, "pretrained_resource": pretrained_resource} if pretrained_resource else kwargs
     config = get_config(model_name, "eval", dataset, **overwrite)
-    config.dataset= "cleargrasp"
-    config.cleargrasp_root="../../cleargrasp/"
+    # config.dataset= "cleargrasp"
+    # config.cleargrasp_root="../../cleargrasp/"
     # config = change_dataset(config, dataset)  # change the dataset
     # pprint(config)
     print(f"Evaluating {model_name} on {dataset}...")
