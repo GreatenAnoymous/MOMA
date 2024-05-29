@@ -335,6 +335,14 @@ class DAM(object):
             print(metrics)
 
             print("Mean Absolute Error (MAE):", mean_absolute_error)
+
+            ## linear fitting
+            metrics=compute_errors(depth[gt_mask], scaled_fitted_depths[gt_mask])
+            absolute_diff = np.abs(depth[gt_mask] - scaled_fitted_depths[gt_mask])
+            mean_absolute_error = np.mean(absolute_diff)
+            print(metrics)
+            print("Mean Absolute Error (MAE):", mean_absolute_error)
+
             import matplotlib.pyplot as plt
             # Visualize depth_numpy
             plt.imshow(depth_numpy.squeeze(), cmap='jet',vmin=0.3, vmax=1)
@@ -455,16 +463,18 @@ def generate_fake_depth(input_folder, output_folder):
 
     
 dam =DAM()
-depth=exr_loader("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000019-opaque-depth-img.exr", ndim = 1, ndim_representation = ['R'])
-depth_raw=exr_loader("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000019-transparent-depth-img.exr", ndim = 1, ndim_representation = ['R'])
-image = cv2.imread("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000019-transparent-rgb-img.jpg")
-mask_image=cv2.imread("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000019-mask.png")
+# depth=exr_loader("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000019-opaque-depth-img.exr", ndim = 1, ndim_representation = ['R'])
+# depth_raw=exr_loader("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000019-transparent-depth-img.exr", ndim = 1, ndim_representation = ['R'])
+# image = cv2.imread("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000019-transparent-rgb-img.jpg")
+# mask_image=cv2.imread("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000019-mask.png")
 
 
 
-# from PIL import Image
-# # image=cv2.imread("./data/nyu/transcg/scene2/70/rgb2.png")
-# # depth =np.array(Image.open("./data/nyu/transcg/scene2/70/depth2-gt-converted.png"))
+from PIL import Image
+image=cv2.imread("./data/nyu/transcg/scene1/75/rgb2.png")
+depth =np.array(Image.open("./data/nyu/transcg/scene1/75/depth2-gt.png"))
+depth_raw=np.array(Image.open("./data/nyu/transcg/scene1/75/depth2-gt.png"))
+mask_image=cv2.imread("./data/nyu/transcg/scene1/75/depth2-gt-mask.png")
 
 # # image=cv2.imread("./data/nyu/pose_test/001/15_opaque_color.png")
 # # depth =np.array(Image.open("./data/nyu/pose_test/001/15_gt_depth.png"))
@@ -472,7 +482,7 @@ mask_image=cv2.imread("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d4
 # # image=cv2.imread("./data/nyu/clearpose_downsample_100/set1/scene1/010100-color.png")
 # # depth =np.array(Image.open("./data/nyu/clearpose_downsample_100/set1/scene1/010100-depth.png"))
 
-scale=1
+scale=4000.0
 # # depth=dam.testDAM(image, depth/scale)
 dam.predictDepth(image, depth/scale,object_mask=mask_image, depth_raw=depth_raw/scale)
 # # dam.dump_to_pointcloud(image)

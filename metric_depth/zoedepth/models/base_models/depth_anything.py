@@ -330,9 +330,9 @@ class DepthAnythingCore(nn.Module):
         self.remove_hooks()
 
     def set_output_channels(self):
-        # self.output_channels = [256, 256, 256, 256, 256]
+        self.output_channels = [256, 256, 256, 256, 256]
         # self.output_channels = [128,128,128,128,128]
-        self.output_channels = [64, 64, 64, 64, 64]
+        # self.output_channels = [64, 64, 64, 64, 64]
 
     @staticmethod
     def build(midas_model_type="dinov2_large", train_midas=False, use_pretrained_midas=True, fetch_features=False, freeze_bn=True, force_keep_ar=False, force_reload=False, **kwargs):

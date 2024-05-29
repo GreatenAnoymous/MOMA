@@ -317,4 +317,78 @@ def eval_cleargrasp():
     print(metrics2)
     print(metrics3)
 
+def eval_transcg():
+    model=load_dam_model()
+    metrics1={"a1":0, "a2":0, "a3":0, "abs_rel":0, "rmse":0, "mae":0}
+    metrics2={"a1":0, "a2":0, "a3":0, "abs_rel":0, "rmse":0, "mae":0}
+    metrics3={"a1":0, "a2":0, "a3":0, "abs_rel":0, "rmse":0, "mae":0}
+    count=0
+    txt_file=open("./tran_test_inputs/transcg_test.txt", "r")
+    dataset_path="./data/nyu/"
+    with open(txt_file, "r") as f:
+        line=f.readline()
+        rgb_path, depth_gt_path,focal=line.split(" ")
+        image=cv2.imread(dataset_path+rgb_path)
+        depth=np.array(Image.open(dataset_path+depth_gt_path))
+        if "depth1" in depth_gt_path:
+            depth=depth/1000
+        else:
+            pass
+            
+
+
+    for i in range(1,90):
+        try:
+            print(i)
+            depth=exr_loader(f"../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/0000000{i:02}-opaque-depth-img.exr", ndim = 1, ndim_representation = ['R'])
+            depth_raw=exr_loader(f"../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/0000000{i:02}-transparent-depth-img.exr", ndim = 1, ndim_representation = ['R'])
+            image = cv2.imread(f"../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/0000000{i:02}-transparent-rgb-img.jpg")
+            mask_image=cv2.imread(f"../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/0000000{i:02}-mask.png")
+            metrics, mean_absolute_error, metrics_linear, mean_absolute_error_linear, metrics_zoedepth ,mean_absolute_error_zoedepth=eval_for_one(model, image, depth, mask_image, depth_raw)
+            metrics1["a1"]+=metrics["a4"]
+            metrics1["a2"]+=metrics["a5"]
+            metrics1["a3"]+=metrics["a1"]
+            metrics1["abs_rel"]+=metrics["abs_rel"]
+            metrics1["rmse"]+=metrics["rmse"]
+            metrics1["mae"]+=mean_absolute_error
+            metrics2["a1"]+=metrics_linear["a4"]
+            metrics2["a2"]+=metrics_linear["a5"]
+            metrics2["a3"]+=metrics_linear["a1"]
+            metrics2["abs_rel"]+=metrics_linear["abs_rel"]
+            metrics2["rmse"]+=metrics_linear["rmse"]
+            metrics2["mae"]+=mean_absolute_error_linear
+            metrics3["a1"]+=metrics_zoedepth["a4"]
+            metrics3["a2"]+=metrics_zoedepth["a5"]
+            metrics3["a3"]+=metrics_zoedepth["a1"]
+            metrics3["abs_rel"]+=metrics_zoedepth["abs_rel"]
+            metrics3["rmse"]+=metrics_zoedepth["rmse"]
+            metrics3["mae"]+=mean_absolute_error_zoedepth
+            count+=1
+        except Exception as e:
+            print(e)
+    metrics2["a1"]/=count
+    metrics2["a2"]/=count
+    metrics2["a3"]/=count
+    metrics2["abs_rel"]/=count
+    metrics2["rmse"]/=count
+    metrics2["mae"]/=count
+    metrics1["a1"]/=count
+    metrics1["a2"]/=count
+    metrics1["a3"]/=count
+    metrics1["abs_rel"]/=count
+    metrics1["rmse"]/=count
+    metrics1["mae"]/=count
+    metrics3["a1"]/=count
+    metrics3["a2"]/=count
+    metrics3["a3"]/=count
+    metrics3["abs_rel"]/=count
+    metrics3["rmse"]/=count
+    metrics3["mae"]/=count
+
+    print(metrics1)
+    print(metrics2)
+    print(metrics3)
+
+
+
 eval_cleargrasp()
