@@ -47,7 +47,7 @@ from .ibims import get_ibims_loader
 from .sun_rgbd_loader import get_sunrgbd_loader
 from .vkitti import get_vkitti_loader
 from .vkitti2 import get_vkitti2_loader
-from .dataloadpreprocess import DataLoadPreprocess
+from .dataloadpreprocess import DataLoadPreprocess, DataLoadPreprocessWithMask
 from .preprocess import CropParams, get_white_border, get_black_border
 from .cleargrasp import get_cleargrasp_loader,ClearGraspSynthetic
 from .omniverse import get_omniverse_loader,OmniverseObject
@@ -186,7 +186,7 @@ class DepthDataLoader(object):
 
         elif mode == 'online_eval':
             print("Using online eval sampler")
-            self.testing_samples = DataLoadPreprocess(
+            self.testing_samples = DataLoadPreprocessWithMask(
                 config, mode, transform=transform)
             if config.distributed:  # redundant. here only for readability and to be more explicit
                 # Give whole test set to all processes (and report evaluation only on one) regardless
@@ -201,7 +201,7 @@ class DepthDataLoader(object):
                                    sampler=self.eval_sampler)
 
         elif mode == 'test':
-            self.testing_samples = DataLoadPreprocess(
+            self.testing_samples = DataLoadPreprocessWithMask(
                 config, mode, transform=transform)
             self.data = DataLoader(self.testing_samples,
                                    1, shuffle=False, num_workers=1)

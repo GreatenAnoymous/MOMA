@@ -202,39 +202,46 @@ class BaseTrainer:
 
                     self.step += 1
 
+                    del losses, batch
+                    torch.cuda.empty_cache()
                     ########################################################################################################
 
-                    if self.test_loader:
-                        if (self.step % validate_every) == 0:
-                            self.model.eval()
-                            # if self.should_write:
-                            #     self.save_checkpoint(
-                            #         f"{self.config.experiment_id}_latest.pt")
+                    # if self.test_loader:
+                    #     if (self.step % validate_every) == 0:
+                    #         self.model.eval()
+                    #         # if self.should_write:
+                    #         #     self.save_checkpoint(
+                    #         #         f"{self.config.experiment_id}_latest.pt")
 
-                            ################################# Validation loop ##################################################
-                            # validate on the entire validation set in every process but save only from rank 0, I know, inefficient, but avoids divergence of processes
-                            metrics, test_losses = self.validate()
-                            assert test_losses is not None
-                            print("Validated: {}".format(metrics))
-                            if self.should_log:
-                                wandb.log(
-                                    {f"Test/{name}": tloss for name, tloss in test_losses.items()}, step=self.step)
+                    #         ################################# Validation loop ##################################################
+                    #         # validate on the entire validation set in every process but save only from rank 0, I know, inefficient, but avoids divergence of processes
+                    #         metrics, test_losses = self.validate()
+                    #         assert test_losses is not None
+                    #         print("Validated: {}".format(metrics))
+                    #         if self.should_log:
+                    #             wandb.log(
+                    #                 {f"Test/{name}": tloss for name, tloss in test_losses.items()}, step=self.step)
 
-                                wandb.log({f"Metrics/{k}": v for k,
-                                        v in metrics.items()}, step=self.step)
+                    #             wandb.log({f"Metrics/{k}": v for k,
+                    #                     v in metrics.items()}, step=self.step)
 
-                                if (metrics[self.metric_criterion] < best_loss) and self.should_write:
-                                    self.save_checkpoint(
-                                        f"{self.config.experiment_id}_best.pt")
-                                    best_loss = metrics[self.metric_criterion]
+                    #             if (metrics[self.metric_criterion] < best_loss) and self.should_write:
+                    #                 self.save_checkpoint(
+                    #                     f"{self.config.experiment_id}_best.pt")
+                    #                 best_loss = metrics[self.metric_criterion]
 
-                            self.model.train()
+                    #         self.model.train()
 
+<<<<<<< HEAD
                             if self.config.distributed:
                                 dist.barrier()
                     
                     torch.cuda.empty_cache()
                     gc.collect()
+=======
+                    #         if self.config.distributed:
+                    #             dist.barrier()
+>>>>>>> fa12c62c3a0934f97e31e8387e016ee59e03782a
                 except Exception as e:
                     # raise e
                     torch.cuda.empty_cache()

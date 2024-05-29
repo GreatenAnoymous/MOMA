@@ -18,7 +18,7 @@ from .dpt_lora import _LoRA_qkv
 
 
 class DCM_DINOv2(DPT_DINOv2):
-    def __init__(self, dinov2:DPT_DINOv2, encoder='vitb', features=128, use_bn=False, out_channels=[96, 192, 384, 768], use_clstoken=False, lora_layer=None):
+    def __init__(self, dinov2:DPT_DINOv2, encoder='vits', features=64, use_bn=False, out_channels=[48, 96, 192, 384], use_clstoken=False, lora_layer=None):
         super(DCM_DINOv2, self).__init__()
         rank=256
         # fusion network

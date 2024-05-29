@@ -77,7 +77,8 @@ class DepthCompleteData(Dataset):
             depth_gt = depth_gt / 1000.0
             depth_raw = depth_raw / 1000.0
             
-            
+            mask = np.logical_and(depth_gt > self.config.min_depth,
+                                  depth_gt < self.config.max_depth).squeeze()[None, ...]
     
 
             depth_gt, depth_mu_gt, detph_std_gt = process_depth(depth_gt, return_mu_std=True)
@@ -89,8 +90,7 @@ class DepthCompleteData(Dataset):
             depth_gt = np.expand_dims(depth_gt, axis=2)
             depth_raw = np.expand_dims(depth_raw, axis=2)
             image, depth_gt, depth_raw = self.train_preprocess(image, depth_gt, depth_raw)
-            mask = np.logical_and(depth_gt > self.config.min_depth,
-                                  depth_gt < self.config.max_depth).squeeze()[None, ...]
+            
             
             if not np.any(mask):
                 print(depth_gt.shape, depth_gt.min(), depth_gt.max())

@@ -268,7 +268,7 @@ def process_depth(
     depth_std = None,
     depth_coeff = 10.0, 
     return_mu_std = False,
-    inpainting = True
+    inpainting = False
 ):
     """
     Process the depth information, including scaling, normalization and clear NaN values.
