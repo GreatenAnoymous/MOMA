@@ -232,16 +232,8 @@ class BaseTrainer:
 
                     #         self.model.train()
 
-<<<<<<< HEAD
-                            if self.config.distributed:
-                                dist.barrier()
-                    
-                    torch.cuda.empty_cache()
-                    gc.collect()
-=======
                     #         if self.config.distributed:
                     #             dist.barrier()
->>>>>>> fa12c62c3a0934f97e31e8387e016ee59e03782a
                 except Exception as e:
                     # raise e
                     torch.cuda.empty_cache()
