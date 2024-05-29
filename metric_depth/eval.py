@@ -92,6 +92,100 @@ def load_dam_model(DEVICE="cuda"):
     depth_anything = depth_anything.to(DEVICE)
     return depth_anything
 
+
+def get_grids_sample(w, h, sample_interval):
+    # Generate a grid of size (w, h) with num_samples samples
+    x = np.linspace(0, w-1, sample_interval)
+    y = np.linspace(0, h-1, sample_interval)
+    grid = np.meshgrid(x, y)
+    return grid
+
+def get_random_samples(w, h, num_samples):
+    # Generate random samples in the range of (w, h)
+    samples = np.random.rand(num_samples, 2) * np.array([w, h])
+    return samples
+
+
+
+def eval_for_one_grid_with_samples(depth_anything, image, depth, object_mask, depth_raw):
+    if object_mask is not None:
+        object_mask=np.array(object_mask)
+        object_mask=object_mask>0
+    depth_numpy = depth_anything.infer_pil(image)
+
+    depth_raw=np.array(depth_raw)
+    depth_raw[np.isnan(depth_raw)] = 0
+    mask = np.logical_and((depth_raw> 0),(depth_raw<1))
+    # if object_mask is not None:
+    #     mask=mask & object_mask[:,:,0]
+    
+            
+    # Flatten the depth_numpy and depth arrays
+    depth_numpy_flat = depth_numpy[mask].flatten()
+    depth_flat = depth_raw[mask].flatten()
+
+    # Fit a linear function to the data
+    coefficients = np.polyfit(depth_numpy_flat, depth_flat, 1)
+
+    # Extract the slope and intercept from the coefficients
+    slope = coefficients[0]
+    intercept = coefficients[1]
+
+    # Apply the linear function to depth_numpy
+    # print(slope,"slope", intercept, "intercept")
+    scaled_fitted_depths = depth_numpy * slope + intercept
+    
+    # nonzero_indices = np.nonzero(depth_raw)
+    interval=5
+    nonzero_indices = get_grids_sample(depth_raw.shape[0], depth_raw.shape[1], interval)
+    nonzero_indices = nonzero_indices[:, depth_raw[nonzero_indices] != 0]
+    x_data = nonzero_indices[0]
+    y_data = nonzero_indices[1]
+    z_data = depth_numpy[nonzero_indices]
+    zt_data = depth_raw[nonzero_indices]
+
+    x_data = nonzero_indices[0]
+    y_data = nonzero_indices[1]
+    z_data = depth_numpy[nonzero_indices]
+    zt_data = depth_raw[nonzero_indices]
+
+    initial_guess = [0, 0, 0, 0, 0, 1]
+    popt, pcov = curve_fit(model_function, (x_data, y_data, z_data), zt_data, p0=initial_guess)
+
+
+    xc_opt, yc_opt,  d_opt, lambda1_opt, lambda2_opt, lambda3_opt = popt
+
+    fitted_depths=np.zeros_like(depth_raw)
+    for i in range(depth.shape[0]):
+        for j in range(depth.shape[1]):
+            fitted_depths[i,j]=model_function((i,j,depth_numpy[i,j]), xc_opt, yc_opt,  d_opt, lambda1_opt, lambda2_opt, lambda3_opt)
+    
+    # print(depth_numpy.shape, depth.shape, torch.tensor(mask).unsqueeze(0).unsqueeze(0).shape)
+    # print([xc_opt, yc_opt, d_opt, lambda1_opt, lambda2_opt, lambda3_opt])
+    # # Calculate absolute differences between original and fitted depth maps
+    
+    gt_mask= np.logical_and(depth>0, depth<1)
+    # print(object_mask[:,:,0].min(), object_mask[:,:,0].max())
+
+    # gt_mask=np.logical_and(gt_mask, object_mask[:,:,0])
+
+    metrics=compute_errors(depth[gt_mask], fitted_depths[gt_mask])
+    absolute_diff = np.abs(depth[gt_mask] - fitted_depths[gt_mask])
+
+
+    # # Calculate mean absolute error
+    mean_absolute_error = np.mean(absolute_diff)
+
+    metrics_linear=compute_errors(depth[gt_mask], scaled_fitted_depths[gt_mask])
+    absolute_diff_linear = np.abs(depth[gt_mask] - scaled_fitted_depths[gt_mask])
+    mean_absolute_error_linear = np.mean(absolute_diff_linear)
+
+    metrics_zoedepth=compute_errors(depth[gt_mask], depth_numpy[gt_mask])
+    absolute_diff_zoedepth = np.abs(depth[gt_mask] - depth_numpy[gt_mask])
+    mean_absolute_error_zoedepth = np.mean(absolute_diff_zoedepth)
+    
+    return metrics, mean_absolute_error, metrics_linear, mean_absolute_error_linear, metrics_zoedepth, mean_absolute_error_zoedepth
+
 def eval_for_one(depth_anything, image, depth, object_mask, depth_raw):
     if object_mask is not None:
         object_mask=np.array(object_mask)

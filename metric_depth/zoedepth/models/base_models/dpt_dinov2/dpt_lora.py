@@ -54,7 +54,7 @@ class _LoRA_qkv(nn.Module):
 
 
 class DPT_DINOv2_Lora(nn.Module):
-    def __init__(self, dinov2=None, encoder='vitb', features=128, use_bn=False, out_channels=[96, 192, 384, 768], use_clstoken=False, lora_layer=None):
+    def __init__(self, dinov2=None, encoder='vits', features=64, use_bn=False, out_channels=[48, 96, 192, 384], use_clstoken=False, lora_layer=None):
         rank=256
         print("LORA rank=",rank)
         super(DPT_DINOv2_Lora, self).__init__()
