@@ -64,17 +64,11 @@ def reduction_batch_based(image_loss, M):
         return torch.sum(image_loss) / divisor
 
 def normalize_prediction_robust(target, mask):
-
-
-
     ssum = torch.sum(mask, (-2, -1))
     valid = ssum > 0
     # print(valid.shape,"valid shape", target.shape, "target shape")
-
     m = torch.zeros_like(ssum).to(torch.float32)
-
     s = torch.ones_like(ssum).to(torch.float32)
-
     # print(mask[valid].shape)
     # print(target[valid].shape)
     # print((mask[valid]*target[valid]).view(valid.sum(), -1).shape)
@@ -99,12 +93,10 @@ class TrimmedMaeLoss(nn.Module):
         # print("trimmed mae loss", prediction.shape, target.shape, mask.shape)
         prediction=prediction.squeeze(1)
         target=target.squeeze(1)
-        target[target==0]=1e-3
-        target_disparity = 1.0 / target
         mask=mask.squeeze(1)
         
         self.__prediction_ssi = normalize_prediction_robust(prediction, mask)
-        target_ = normalize_prediction_robust(target_disparity, mask)
+        target_ = normalize_prediction_robust(target, mask)
 
         total = trimmed_mae_loss(self.__prediction_ssi, target_, mask)
         return total

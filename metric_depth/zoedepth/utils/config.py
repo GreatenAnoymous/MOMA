@@ -176,8 +176,31 @@ DATASETS_CONFIG = {
         "max_depth": 2,
         "data_root": "/mnt/ssd_990/teng/BinPicking/cleargrasp/"
     },
+    
+    "arcl":{
+        "dataset": "arcl",
+        "avoid_boundary": False,
+        "min_depth": 1e-3,   # originally 0.1
+        "max_depth": 2,
+        "data_path": os.path.join(HOME_DIR, "nyu"),
+        "gt_path": os.path.join(HOME_DIR, "nyu"),
+        "filenames_file": "./train_test_inputs/arcl_train.txt",
+        "input_height": 480,
+        "input_width": 640,
+        "data_path_eval": os.path.join(HOME_DIR, "nyu"),
+        "gt_path_eval": os.path.join(HOME_DIR, "nyu"),
+        "filenames_file_eval": "./train_test_inputs/arcl_test.txt",
+        "min_depth_eval": 1e-3,
+        "max_depth_eval": 2,
+        "min_depth_diff": -10,
+        "max_depth_diff": 10,
+        "do_random_rotate": False,
+        "degree": 1.0,
+        "do_kb_crop": False,
+        "garg_crop": False,
+        "eigen_crop": False
+    },
 
-   
     "ibims": {
         "dataset": "ibims",
         "ibims_root": os.path.join(HOME_DIR, "iBims1/m1455541/ibims1_core_raw/"),
@@ -436,7 +459,7 @@ def get_config(model_name, mode='train', dataset=None, **overwrite_kwargs):
     check_choices("Model", model_name, ["zoedepth", "zoedepth_nk", "damc"])
     check_choices("Mode", mode, ["train", "infer", "eval"])
     if mode == "train":
-        check_choices("Dataset", dataset, ["nyu", "kitti", "mix", "cleargrasp", "omniverse", "clearpose", "transcg"  ,None])
+        check_choices("Dataset", dataset, ["nyu", "kitti", "mix", "cleargrasp", "omniverse", "clearpose", "transcg", "arcl"  ,None])
 
     config = flatten({**COMMON_CONFIG, **COMMON_TRAINING_CONFIG})
     config = update_model_config(config, mode, model_name)

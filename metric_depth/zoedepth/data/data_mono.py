@@ -92,6 +92,14 @@ class DepthDataLoader(object):
             else:
                 self.data = DataLoader(ClearPoseDataset(config, 'online_eval', device=device), 1, num_workers=1, pin_memory=False)
             return
+        
+        if config.dataset == 'arcl':
+            if mode=="train":
+                self.data = DataLoader(ClearPoseDataset(config, "train", device=device), batch_size=config.batch_size, num_workers=config.workers, pin_memory=False)
+            else:
+                self.data = DataLoader(ClearPoseDataset(config, 'online_eval', device=device), 1, num_workers=1, pin_memory=False)  
+            return
+        
         if config.dataset == 'transcg':
             if mode=="train":
                 self.data = DataLoader(ClearPoseDataset(config, "train", device=device), batch_size=config.batch_size, num_workers=config.workers, pin_memory=False)

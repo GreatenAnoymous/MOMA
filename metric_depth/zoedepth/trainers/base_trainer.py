@@ -39,7 +39,7 @@ from tqdm import tqdm
 
 from zoedepth.utils.config import flatten
 from zoedepth.utils.misc import RunningAverageDict, colorize, colors
-
+import gc
 
 def is_rank_zero(args):
     return args.rank == 0
@@ -232,10 +232,17 @@ class BaseTrainer:
 
                             if self.config.distributed:
                                 dist.barrier()
+                    
+                    torch.cuda.empty_cache()
+                    gc.collect()
                 except Exception as e:
                     # raise e
+                    torch.cuda.empty_cache()
+                    gc.collect()
                     print(f"Error: {e}")
                 except:
+                    torch.cuda.empty_cache()
+                    gc.collect()
                     print("Unknown error")
 
                         
