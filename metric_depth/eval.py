@@ -22,6 +22,7 @@ from zoedepth.models.base_models.depth_anything_lora import DepthAnythingLoraCor
 from zoedepth.models.base_models.depth_anything import DepthAnythingCore
 import numpy as np
 from scipy.optimize import curve_fit
+import json
 
 
 def model_function(xy, xc, yc, d, alpha, beta, fc):
@@ -316,6 +317,33 @@ def eval_cleargrasp():
     print(metrics1)
     print(metrics2)
     print(metrics3)
+    
+    
+def save_tmp(metrics1, metrics2, metrics3, count):
+    tmp_metrics1=metrics1.copy()
+    tmp_metrics2=metrics2.copy()
+    tmp_metrics3=metrics3.copy()
+    tmp_metrics1["a1"]/=count
+    tmp_metrics1["a2"]/=count
+    tmp_metrics1["a3"]/=count
+    tmp_metrics1["abs_rel"]/=count
+    tmp_metrics1["rmse"]/=count
+    tmp_metrics1["mae"]/=count
+    tmp_metrics2["a1"]/=count
+    tmp_metrics2["a2"]/=count
+    tmp_metrics2["a3"]/=count
+    tmp_metrics2["abs_rel"]/=count
+    tmp_metrics2["rmse"]/=count
+    tmp_metrics2["mae"]/=count
+    tmp_metrics3["a1"]/=count
+    tmp_metrics3["a2"]/=count
+    tmp_metrics3["a3"]/=count
+    tmp_metrics3["abs_rel"]/=count
+    tmp_metrics3["rmse"]/=count
+    tmp_metrics3["mae"]/=count
+    
+    with open("tmp.json", "w") as f:
+        json.dump({"metrics1":tmp_metrics1, "metrics2":tmp_metrics2, "metrics3": tmp_metrics3}, f)
 
 def eval_transcg():
     model=load_dam_model()
@@ -323,49 +351,59 @@ def eval_transcg():
     metrics2={"a1":0, "a2":0, "a3":0, "abs_rel":0, "rmse":0, "mae":0}
     metrics3={"a1":0, "a2":0, "a3":0, "abs_rel":0, "rmse":0, "mae":0}
     count=0
-    txt_file=open("./tran_test_inputs/transcg_test.txt", "r")
+    txt_file="./train_test_inputs/transcg_test.txt"
     dataset_path="./data/nyu/"
     with open(txt_file, "r") as f:
-        line=f.readline()
-        rgb_path, depth_gt_path,focal=line.split(" ")
-        image=cv2.imread(dataset_path+rgb_path)
-        depth=np.array(Image.open(dataset_path+depth_gt_path))
-        if "depth1" in depth_gt_path:
-            depth=depth/1000
-        else:
-            pass
+        for line in f.readlines():
+    
+            rgb_path, depth_gt_path,focal=line.split(" ")
+        
+            image=cv2.imread(dataset_path+rgb_path)
             
+            if "depth1" in depth_gt_path:
+                depth=np.array(Image.open(dataset_path+depth_gt_path))
+                depth_raw_path=depth_gt_path.replace("depth1-gt", "depth1")
+                depth_raw=np.array(Image.open(dataset_path+depth_raw_path))
+                depth=depth/1000
+                depth_raw=depth_raw/1000
+                mask_path=depth_gt_path.replace("depth1-gt", "depth1-gt-mask")
+                mask_image=cv2.imread(dataset_path+mask_path)
 
-
-    for i in range(1,90):
-        try:
-            print(i)
-            depth=exr_loader(f"../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/0000000{i:02}-opaque-depth-img.exr", ndim = 1, ndim_representation = ['R'])
-            depth_raw=exr_loader(f"../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/0000000{i:02}-transparent-depth-img.exr", ndim = 1, ndim_representation = ['R'])
-            image = cv2.imread(f"../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/0000000{i:02}-transparent-rgb-img.jpg")
-            mask_image=cv2.imread(f"../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/0000000{i:02}-mask.png")
-            metrics, mean_absolute_error, metrics_linear, mean_absolute_error_linear, metrics_zoedepth ,mean_absolute_error_zoedepth=eval_for_one(model, image, depth, mask_image, depth_raw)
-            metrics1["a1"]+=metrics["a4"]
-            metrics1["a2"]+=metrics["a5"]
-            metrics1["a3"]+=metrics["a1"]
-            metrics1["abs_rel"]+=metrics["abs_rel"]
-            metrics1["rmse"]+=metrics["rmse"]
-            metrics1["mae"]+=mean_absolute_error
-            metrics2["a1"]+=metrics_linear["a4"]
-            metrics2["a2"]+=metrics_linear["a5"]
-            metrics2["a3"]+=metrics_linear["a1"]
-            metrics2["abs_rel"]+=metrics_linear["abs_rel"]
-            metrics2["rmse"]+=metrics_linear["rmse"]
-            metrics2["mae"]+=mean_absolute_error_linear
-            metrics3["a1"]+=metrics_zoedepth["a4"]
-            metrics3["a2"]+=metrics_zoedepth["a5"]
-            metrics3["a3"]+=metrics_zoedepth["a1"]
-            metrics3["abs_rel"]+=metrics_zoedepth["abs_rel"]
-            metrics3["rmse"]+=metrics_zoedepth["rmse"]
-            metrics3["mae"]+=mean_absolute_error_zoedepth
-            count+=1
-        except Exception as e:
-            print(e)
+            else:
+                continue
+                depth=np.array(Image.open(dataset_path+depth_gt_path))
+                depth_raw_path=depth_gt_path.replace("depth2-gt", "depth2")
+                depth=depth/1000
+                depth_raw=np.array(Image.open(dataset_path+depth_raw_path))
+                depth_raw=depth_raw/1000
+                mask_path=depth_gt_path.replace("depth2-gt-converted", "depth2-gt-mask")
+                mask_image=cv2.imread(dataset_path+mask_path)
+            print(depth_raw_path, depth_gt_path, mask_path)
+            try:
+                metrics, mean_absolute_error, metrics_linear, mean_absolute_error_linear, metrics_zoedepth ,mean_absolute_error_zoedepth=eval_for_one(model, image, depth, mask_image, depth_raw)
+                metrics1["a1"]+=metrics["a4"]
+                metrics1["a2"]+=metrics["a5"]
+                metrics1["a3"]+=metrics["a1"]
+                metrics1["abs_rel"]+=metrics["abs_rel"]
+                metrics1["rmse"]+=metrics["rmse"]
+                metrics1["mae"]+=mean_absolute_error
+                metrics2["a1"]+=metrics_linear["a4"]
+                metrics2["a2"]+=metrics_linear["a5"]
+                metrics2["a3"]+=metrics_linear["a1"]
+                metrics2["abs_rel"]+=metrics_linear["abs_rel"]
+                metrics2["rmse"]+=metrics_linear["rmse"]
+                metrics2["mae"]+=mean_absolute_error_linear
+                metrics3["a1"]+=metrics_zoedepth["a4"]
+                metrics3["a2"]+=metrics_zoedepth["a5"]
+                metrics3["a3"]+=metrics_zoedepth["a1"]
+                metrics3["abs_rel"]+=metrics_zoedepth["abs_rel"]
+                metrics3["rmse"]+=metrics_zoedepth["rmse"]
+                metrics3["mae"]+=mean_absolute_error_zoedepth
+                count+=1
+                save_tmp(metrics1, metrics2, metrics3, count)
+            except Exception as e:
+                print(e)    
+        
     metrics2["a1"]/=count
     metrics2["a2"]/=count
     metrics2["a3"]/=count
@@ -391,4 +429,5 @@ def eval_transcg():
 
 
 
-eval_cleargrasp()
+# eval_cleargrasp()
+eval_transcg()

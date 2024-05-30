@@ -471,10 +471,10 @@ dam =DAM()
 
 
 from PIL import Image
-image=cv2.imread("./data/nyu/transcg/scene1/75/rgb2.png")
-depth =np.array(Image.open("./data/nyu/transcg/scene1/75/depth2-gt.png"))
-depth_raw=np.array(Image.open("./data/nyu/transcg/scene1/75/depth2-gt.png"))
-mask_image=cv2.imread("./data/nyu/transcg/scene1/75/depth2-gt-mask.png")
+image=cv2.imread("./data/nyu/transcg/scene97/81/rgb1.png")
+depth =np.array(Image.open("./data/nyu/transcg/scene97/81/depth1-gt.png"))
+depth_raw=np.array(Image.open("./data/nyu/transcg/scene97/81/depth1-gt.png"))
+mask_image=cv2.imread("./data/nyu/transcg/scene97/81/depth1-gt-mask.png")
 
 # # image=cv2.imread("./data/nyu/pose_test/001/15_opaque_color.png")
 # # depth =np.array(Image.open("./data/nyu/pose_test/001/15_gt_depth.png"))
@@ -482,7 +482,7 @@ mask_image=cv2.imread("./data/nyu/transcg/scene1/75/depth2-gt-mask.png")
 # # image=cv2.imread("./data/nyu/clearpose_downsample_100/set1/scene1/010100-color.png")
 # # depth =np.array(Image.open("./data/nyu/clearpose_downsample_100/set1/scene1/010100-depth.png"))
 
-scale=4000.0
+scale=1000.0
 # # depth=dam.testDAM(image, depth/scale)
 dam.predictDepth(image, depth/scale,object_mask=mask_image, depth_raw=depth_raw/scale)
 # # dam.dump_to_pointcloud(image)

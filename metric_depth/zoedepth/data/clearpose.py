@@ -36,7 +36,7 @@ class ClearPoseDataset(Dataset):
 
         self.mode = mode
         self.transform = transform
-        self.image_size= kwargs.get('image_size', (1280, 720))
+        self.image_size= kwargs.get('image_size', (640, 480))
         self.depth_min = kwargs.get('depth_min', 1e-3)
         self.depth_max = kwargs.get('depth_max', 2)
         self.depth_norm = kwargs.get('depth_norm', 1.0)
@@ -85,6 +85,7 @@ class ClearPoseDataset(Dataset):
     
     def __getitem__(self, id):
         sample_path = self.filenames[id]
+
         focal = float(sample_path.split()[2])
         if self.mode == 'train':
             image_path = os.path.join(

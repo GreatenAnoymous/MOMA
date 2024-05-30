@@ -49,7 +49,7 @@ class OmniverseObject(Dataset):
             self.h5_paths = full_h5_paths[split_idx:]
         self.use_aug = kwargs.get('use_augmentation', True)
         self.rgb_aug_prob = kwargs.get('rgb_augmentation_probability', 0.8)
-        self.image_size = kwargs.get('image_size', (1280, 720))
+        self.image_size = kwargs.get('image_size', (640, 480))
         self.epsilon = kwargs.get('epsilon', 1e-8)
         self.depth_min = kwargs.get('depth_min', 0.3)
         self.depth_max = kwargs.get('depth_max', 1.5)

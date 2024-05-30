@@ -89,7 +89,15 @@ class TrimmedMaeLoss(nn.Module):
 
         self.__prediction_ssi = None
 
-    def forward(self, prediction, target, mask):
+    def forward(self, prediction, target, mask, interpolate=True, return_interpolated=False):
+        
+        prediction = extract_key(prediction, KEY_OUTPUT)
+        if prediction.shape[-1] != target.shape[-1] and interpolate:
+            prediction = nn.functional.interpolate(
+                prediction, target.shape[-2:], mode='bilinear', align_corners=True)
+        else:
+            pass
+    
         # print("trimmed mae loss", prediction.shape, target.shape, mask.shape)
         prediction=prediction.squeeze(1)
         target=target.squeeze(1)
@@ -99,6 +107,8 @@ class TrimmedMaeLoss(nn.Module):
         target_ = normalize_prediction_robust(target, mask)
 
         total = trimmed_mae_loss(self.__prediction_ssi, target_, mask)
+        if return_interpolated:
+            return total, prediction
         return total
 
     def __get_prediction_ssi(self):

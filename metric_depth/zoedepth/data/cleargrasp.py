@@ -129,7 +129,7 @@ class ClearGraspSynthetic(Dataset):
                 self.json_paths += cur_json_paths
         # Integrity double-check
         assert len(self.image_paths) == len(self.mask_paths) and len(self.mask_paths) == len(self.depth_gt_paths) and len(self.json_paths) == len(self.depth_gt_paths)
-        self.image_size = kwargs.get('image_size', (1280, 720))
+        self.image_size = kwargs.get('image_size', (640, 480))
         self.use_aug = kwargs.get('use_augmentation', True)
         self.rgb_aug_prob = kwargs.get('rgb_augmentation_probability', 0.8)
         self.depth_min = kwargs.get('depth_min', 0.3)

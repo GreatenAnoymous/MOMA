@@ -74,7 +74,7 @@ class DepthDataLoader(object):
             transform (torchvision.transforms, optional): Transform to apply to the data. Defaults to None.
         """
         self.config = config
-        print("num workers", config.workers)
+    
         if config.dataset=='depth_complete':
             if mode == 'train':
                 pin_memory = True
@@ -94,6 +94,7 @@ class DepthDataLoader(object):
             return
         
         if config.dataset == 'arcl':
+            config=change_dataset(edict(config), 'arcl')
             if mode=="train":
                 self.data = DataLoader(ClearPoseDataset(config, "train", device=device), batch_size=config.batch_size, num_workers=config.workers, pin_memory=False)
             else:
@@ -254,6 +255,7 @@ class TransMixDataloader(object):
         cleargrasp_conf=change_dataset(edict(config), 'cleargrasp')
         omniverse_conf=change_dataset(edict(config), 'omniverse')
         transcg_conf=change_dataset(edict(config), 'transcg')
+    
         clearpose_conf=change_dataset(edict(config), 'clearpose')
         img_size = self.config.get("img_size", None)
         if mode=="train":

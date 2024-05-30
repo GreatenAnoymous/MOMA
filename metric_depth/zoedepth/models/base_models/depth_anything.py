@@ -330,7 +330,7 @@ class DepthAnythingCore(nn.Module):
         self.remove_hooks()
 
     def set_output_channels(self):
-        self.output_channels = [256, 256, 256, 256, 256]
+        self.output_channels = [256, 256, 256, 256,  256]
         # self.output_channels = [128,128,128,128,128]
         # self.output_channels = [64, 64, 64, 64, 64]
 

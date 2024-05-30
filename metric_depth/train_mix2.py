@@ -46,6 +46,9 @@ from tqdm import tqdm
 from zoedepth.utils.config import DATASETS_CONFIG
 from zoedepth.utils.misc import RunningAverageDict, colorize, colors
 from zoedepth.utils.config import flatten
+import copy
+import torch.optim as optim
+
 os.environ["PYOPENGL_PLATFORM"] = "egl"
 os.environ["WANDB_START_METHOD"] = "thread"
 
@@ -117,6 +120,18 @@ class MixedTrainer(zoedepth_trainer):
         self.ssi_loss=TrimmedMaeLoss()
         self.scaler = amp.GradScaler(enabled=self.config.use_amp)
     
+    @property
+    def iters_per_epoch(self):
+        return len(self.train_loader1)+len(self.train_loader2)
+
+    def init_scheduler(self):
+        
+        lrs = [l['lr'] for l in self.optimizer.param_groups]
+        return optim.lr_scheduler.OneCycleLR(self.optimizer, lrs, epochs=self.config.epochs, steps_per_epoch=len(self.train_loader1)+len(self.train_loader2),
+                                             cycle_momentum=self.config.cycle_momentum,
+                                             base_momentum=0.85, max_momentum=0.95, div_factor=self.config.div_factor, final_div_factor=self.config.final_div_factor, pct_start=self.config.pct_start, three_phase=self.config.three_phase)
+
+
     
     def train_on_batch(self, batch, train_step):
         """
@@ -293,8 +308,7 @@ class MixedTrainer(zoedepth_trainer):
                     del losses, batch
                     torch.cuda.empty_cache()       
                 except Exception as e:
-                    del losses, batch
-                    torch.cuda.empty_cache()  
+                    raise e
                     print(f"Error: {e}")
                 except:
                     del losses, batch
@@ -349,13 +363,15 @@ def main_worker(gpu, ngpus_per_node, config):
         total_params = f"{round(count_parameters(model)/1e6,2)}M"
         config.total_params = total_params
         print(f"Total parameters : {total_params}")
-        opaque_config= config.copy()
+        print(config.dataset)
+        opaque_config= copy.deepcopy(config)
+        
         opaque_config.dataset="arcl"
-
+        print(opaque_config.dataset)
         train_loader_transparent = TransMixDataloader(config, "train").data
         train_loader_opaque = DepthDataLoader(opaque_config, "train").data
 
-        trainer = MixedTrainer(config, model, train_loader_opaque, train_loader_transparent, device=gpu)
+        trainer = MixedTrainer(config, model,train_loader_transparent, train_loader_opaque,  device=gpu)
         trainer.train()
 
         

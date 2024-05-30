@@ -501,6 +501,7 @@ def process_data(
         # 'cy': torch.tensor(camera_intrinsics[1, 2])
     }
     # print("depth gt shape", data_dict["depth"].shape)
+    # print(rgb.shape, depth.shape, depth_gt.shape, depth_gt_mask.shape, "full")
 
     if with_original:
         data_dict['depth_original'] = torch.FloatTensor(depth_original)
@@ -535,7 +536,7 @@ def process_data_light(rgb,  depth_gt, depth_min, depth_max, depth_raw=None, dep
 
 
     rgb = rgb.transpose(2, 0, 1)
-
+    # print(rgb.shape, depth_gt.shape, depth_raw.shape, depth_gt_mask.shape, "light")
     data_dict = {
         'dataset': 'nyu',
         'image': torch.FloatTensor(rgb),
