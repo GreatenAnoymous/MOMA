@@ -21,6 +21,8 @@ from zoedepth.utils.misc import compute_errors, compute_ssi_metrics, compute_ali
 
 import numpy as np
 from scipy.optimize import curve_fit
+from scipy import stats
+
 
 
 def model_function(xy, xc, yc, d, alpha, beta, fc):
@@ -56,29 +58,35 @@ def model_function(xy, xc, yc, d, alpha, beta, fc):
 #             beta[:, i, j] = local_alignment(i, j, u, v, depths, depths_gt, b).flatten()
 #     return beta
 
-def compute_local_alignment(u, v, depths, depths_gt, M, N, b=640, alpha=1e-7):
+def compute_local_alignment(u, v, depths, depths_gt, M, N, b=100, alpha=1):
     # Compute distance matrix
     ui, vi = np.indices((M, N))
-    dist = np.sqrt((u[:, None, None] - ui)**2 + (v[:, None, None] - vi)**2)
-    print(dist.shape, depths.shape, depths_gt.shape)
+
+    dist = (u[:, None, None] - ui)**2 + (v[:, None, None] - vi)**2
+
     # Compute weight matrix
-    w = 1 / np.sqrt(2 * np.pi) * np.exp(-alpha * dist**2 / (2 * b**2))
+    w =  np.exp(-alpha * dist / (2 * b**2))
+
     W = np.zeros([len(u), len(u),M,N])
-    W[:, :, ui, vi] = w
+    W[:, :, ui, vi] = 1
+    idx= np.arange(len(u))
+    W[idx, idx, :, :] = dist
+    # print(W[0][0], u.shape, v.shape, dist.shape, W.shape)
     W=np.transpose(W, (2,3,0,1))
 
     # Construct X matrix
     X = np.vstack((depths, np.ones_like(depths)))
+
+    
     X = X.T
 
     # Compute intermediate matrices
-    # XTWX = np.matmul(np.matmul(X.T, W), X)
+
     XTWX  =np.einsum('mk,ijkl,ln->ijmn',X.T, W,  X)
 
-    XTWX =np.linalg.pinv(XTWX)
 
-    # exit()
-    # XTWy = np.matmul(np.matmul(X.T, W), depths_gt)
+    XTWX =np.linalg.pinv(XTWX)
+    
     depths_gt = depths_gt.reshape(-1, 1)
     XTWy=np.einsum('mk,ijkl,ln->ijmn',  X.T,W, depths_gt)
 
@@ -86,33 +94,23 @@ def compute_local_alignment(u, v, depths, depths_gt, M, N, b=640, alpha=1e-7):
     beta = np.einsum('ijkl,ijlm->ijkm', XTWX, XTWy)
 
     # Reshape beta to match the required output shape
-    print(beta.shape)
+    # print(beta)
     return beta
 
-def test_function():
-    W,H=640, 480
-    depth = np.random.rand(W, H)
-    depth_gt = np.random.rand(W, H)
 
-    depth_1d = depth.flatten()
-    depth_gt_1d = depth_gt.flatten()
+def compute_local_alignment_bruteforce(u, v, depths, depths_gt, M, N, b=300, alpha=1):
+    beta=np.zeros((M, N, 2, 1))
+    for i in range(M):
+        for j in range(N):
+            w= np.exp(-alpha * ((u-i)**2 + (v-j)**2) / (2 * b**2))
+            coefficients = np.polyfit(depths, depths_gt, 1, w=w)
+            beta[i, j, 0, 0] = coefficients[0]
+            beta[i, j, 1, 0] = coefficients[1]
+    print(beta)
+    return beta
+
     
 
-    u, v = np.meshgrid(np.arange(H), np.arange(W))
-    
-    u = u.flatten()
-    v = v.flatten()
-    
-    # Randomly choose 200 points
-    indices = np.random.choice(len(depth_1d), size=50, replace=False)
-
-    # Get the corresponding u, v, depth_gt_1d
-    u_selected = u[indices]
-    v_selected = v[indices]
-    depth_gt_1d_selected = depth_gt_1d[indices]
-    depth_1d_selected = depth_1d[indices]
-    beta=compute_local_alignment(u_selected, v_selected, depth_1d_selected, depth_gt_1d_selected, 640, 480)
-    print(beta.shape)
 
 class CameraIntrinsic:
     def __init__(self,fx=900,fy=900,ppx=321.8606872558594,ppy=239.07879638671875) -> None:
@@ -251,6 +249,7 @@ class DAM(object):
             object_mask=np.array(object_mask)
             object_mask=object_mask>0
         checkpoint="./depth_anything_finetune/mixed.pt"
+        # checkpoint="./depth_anything_finetune/transcg_dam.pt"
         # checkpoint="./checkpoints/depth_anything_metric_depth_indoor.pt"
         config=get_config("zoedepth", "train", "nyu")
         depth_anything = build_model(config)
@@ -278,19 +277,50 @@ class DAM(object):
             depth_numpy_flat = depth_numpy[mask].flatten()
             depth_flat = depth_raw[mask].flatten()
 
-            # Fit a linear function to the data
-            coefficients = np.polyfit(depth_numpy_flat, depth_flat, 1)
+            # # Fit a linear function to the data
+            # coefficients = np.polyfit(depth_numpy_flat, depth_flat, 1)
 
-            # Extract the slope and intercept from the coefficients
-            slope = coefficients[0]
-            intercept = coefficients[1]
+            # # Extract the slope and intercept from the coefficients
+            # slope = coefficients[0]
+            # intercept = coefficients[1]
 
+            slope, intercept, r_value, p_value, std_err = stats.linregress(depth_numpy_flat, depth_flat)
+            
             # Apply the linear function to depth_numpy
             # print(slope,"slope", intercept, "intercept")
             scaled_fitted_depths = depth_numpy * slope + intercept
+
+            import matplotlib.pyplot as plt
+
+            # Plot the linear fitting result
+            plt.scatter(depth_numpy_flat, depth_flat, color='blue', label='Original Data')
+            plt.plot(depth_numpy_flat, depth_numpy_flat * slope + intercept, color='red', label='Linear Fit')
+            plt.xlabel('Depth Anything Depth')
+            plt.ylabel('Ground Truth Depth')
+            plt.legend()
+            plt.savefig('linear_fit.png')
+            plt.close()
             
             nonzero_indices = np.nonzero(depth_raw)
-            nonzero_indices = np.nonzero(depth_raw)
+
+            array1, array2 = nonzero_indices
+
+            total_indices = len(array1)
+            N=100
+    
+            # Randomly sample N indices from the available indices
+            sampled_indices = np.random.choice(total_indices, N, replace=False)
+            
+            
+            # Use the sampled indices to create new arrays
+            sampled_array1 = array1[sampled_indices]
+            sampled_array2 = array2[sampled_indices]
+
+            assert len(sampled_array1)==N, "Sampled array1 must have N elements"
+
+            nonzero_indices = (sampled_array1, sampled_array2)
+
+
             x_data = nonzero_indices[0]
             y_data = nonzero_indices[1]
             z_data = depth_numpy[nonzero_indices]
@@ -299,10 +329,10 @@ class DAM(object):
             # y_data = nonzero_indices[1]
             # z_data = depth_numpy[nonzero_indices]
             # zt_data=depth[nonzero_indices]
-            initial_guess = [0, 0, 0, 0, 0, 1]
+            initial_guess = np.random.rand(6)
             popt, pcov = curve_fit(model_function, (x_data, y_data, z_data), zt_data, p0=initial_guess)
 
-            xc_opt, yc_opt,  d_opt, lambda1_opt, lambda2_opt, lambda3_opt =[534.2324844480863, -190.42289893222687, -0.4183163449642485, 0.0001494418507248443, 0.0011123054000330792, 2.994101666824724]
+            # xc_opt, yc_opt,  d_opt, lambda1_opt, lambda2_opt, lambda3_opt =[534.2324844480863, -190.42289893222687, -0.4183163449642485, 0.0001494418507248443, 0.0011123054000330792, 2.994101666824724]
             # xc_opt, yc_opt,  d_opt, lambda1_opt, lambda2_opt, lambda3_opt =[-12876.598818650644, 3879.3807488025254, 0.09036849843330247, 1.7720131641397066e-05, 7.030278082064835e-05, 0.4987274794212721]
             xc_opt, yc_opt,  d_opt, lambda1_opt, lambda2_opt, lambda3_opt = popt
 
@@ -373,34 +403,34 @@ class DAM(object):
             plt.savefig('rgb.png')
             plt.close()
 
-            # print(depth.shape)
-            # w,h=depth.shape[0], depth.shape[1]
-            # depth_gt_1d=depth.flatten()
-            # depth_1d=depth_numpy.flatten()
-            # valid=depth_gt_1d>0
-            # depth_gt_1d=depth_gt_1d[valid]
-            # depth_1d=depth_1d[valid]
-            # u,v=np.meshgrid(np.arange(h), np.arange(w))
-            # u=u.flatten()
-            # v=v.flatten()
-            # u=u[valid]
-            # v=v[valid]  
-            # indices = np.random.choice(len(depth_1d), size=50, replace=False)
-            # u_selected = u[indices]
-            # v_selected = v[indices]
-            # depth_gt_1d_selected = depth_gt_1d[indices]
-            # depth_1d_selected = depth_1d[indices]
-            # beta=compute_local_alignment(u_selected, v_selected, depth_1d_selected, depth_gt_1d_selected, w, h)
-            # print(beta.shape)
-            # # expanded_depth = np.expand_dims(depth, axis=-1)
+            print(depth.shape)
+            w,h=depth.shape[0], depth.shape[1]
+            depth_gt_1d=depth.flatten()
+            depth_1d=depth_numpy.flatten()
+            valid=depth_gt_1d>0
+            depth_gt_1d=depth_gt_1d[valid]
+            depth_1d=depth_1d[valid]
+            u,v=np.meshgrid(np.arange(h), np.arange(w))
+            u=u.flatten()
+            v=v.flatten()
+            u=u[valid]
+            v=v[valid]  
+            indices = np.random.choice(len(depth_1d), size=20, replace=False)
+            u_selected = u[indices]
+            v_selected = v[indices]
+            depth_gt_1d_selected = depth_gt_1d[indices]
+            depth_1d_selected = depth_1d[indices]
+            beta=compute_local_alignment(u_selected, v_selected, depth_1d_selected, depth_gt_1d_selected, w, h)
+            print(beta.shape)
+            # expanded_depth = np.expand_dims(depth, axis=-1)
 
-            # # Perform the element-wise multiplication and addition
-            # recovered_depth = beta[..., 0, 0] * depth_numpy + beta[..., 1, 0]
+            # Perform the element-wise multiplication and addition
+            recovered_depth = beta[..., 0, 0] * depth_numpy + beta[..., 1, 0]
             
-            # plt.imshow(recovered_depth.reshape(w,h), cmap='jet',vmin=0, vmax=1.5)
-            # plt.colorbar()
-            # plt.savefig('depth_recovered.png')
-            # plt.close()
+            plt.imshow(recovered_depth.reshape(w,h), cmap='jet',vmin=0, vmax=1.5)
+            plt.colorbar()
+            plt.savefig('depth_recovered.png')
+            plt.close()
 
 
 
@@ -463,18 +493,27 @@ def generate_fake_depth(input_folder, output_folder):
 
     
 dam =DAM()
-# depth=exr_loader("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000019-opaque-depth-img.exr", ndim = 1, ndim_representation = ['R'])
-# depth_raw=exr_loader("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000019-transparent-depth-img.exr", ndim = 1, ndim_representation = ['R'])
-# image = cv2.imread("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000019-transparent-rgb-img.jpg")
-# mask_image=cv2.imread("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000019-mask.png")
+depth=exr_loader("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000034-opaque-depth-img.exr", ndim = 1, ndim_representation = ['R'])
+depth_raw=exr_loader("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000034-transparent-depth-img.exr", ndim = 1, ndim_representation = ['R'])
+image = cv2.imread("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000034-transparent-rgb-img.jpg")
+mask_image=cv2.imread("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000034-mask.png")
 
 
 
 from PIL import Image
-image=cv2.imread("./data/nyu/transcg/scene97/81/rgb1.png")
-depth =np.array(Image.open("./data/nyu/transcg/scene97/81/depth1-gt.png"))
-depth_raw=np.array(Image.open("./data/nyu/transcg/scene97/81/depth1-gt.png"))
-mask_image=cv2.imread("./data/nyu/transcg/scene97/81/depth1-gt-mask.png")
+# image=cv2.imread("./data/nyu/transcg/scene97/81/rgb1.png")
+# depth =np.array(Image.open("./data/nyu/transcg/scene97/81/depth1-gt.png"))
+# depth_raw=np.array(Image.open("./data/nyu/transcg/scene97/81/depth1-gt.png"))
+# mask_image=cv2.imread("./data/nyu/transcg/scene97/81/depth1-gt-mask.png")
+
+
+# id=3
+# data_id=6
+# image=cv2.imread(f"./data/nyu/test/00{data_id}/{id}_opaque_color.png")
+# image=cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+# depth =np.array(Image.open(f"./data/nyu/test/00{data_id}/{id}_gt_depth.png"))
+# depth_raw=np.array(Image.open(f"./data/nyu/test/00{data_id}/{id}_gt_depth.png"))
+# mask_image=cv2.imread(f"./data/nyu/test/00{data_id}/{id}_mask.png")
 
 # # image=cv2.imread("./data/nyu/pose_test/001/15_opaque_color.png")
 # # depth =np.array(Image.open("./data/nyu/pose_test/001/15_gt_depth.png"))
@@ -482,7 +521,7 @@ mask_image=cv2.imread("./data/nyu/transcg/scene97/81/depth1-gt-mask.png")
 # # image=cv2.imread("./data/nyu/clearpose_downsample_100/set1/scene1/010100-color.png")
 # # depth =np.array(Image.open("./data/nyu/clearpose_downsample_100/set1/scene1/010100-depth.png"))
 
-scale=1000.0
+scale=1
 # # depth=dam.testDAM(image, depth/scale)
 dam.predictDepth(image, depth/scale,object_mask=mask_image, depth_raw=depth_raw/scale)
 # # dam.dump_to_pointcloud(image)

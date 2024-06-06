@@ -54,7 +54,7 @@ class ClearPoseDataset(Dataset):
             do_augment = random.random()
             if do_augment > 0.5:
                 image = self.augment_image(image)
-    
+        return image, depth_gt
     
     def augment_image(self, image):
         # gamma augmentation
@@ -105,6 +105,7 @@ class ClearPoseDataset(Dataset):
             depth_gt = np.expand_dims(depth_gt, axis=2)
             image=image/255.0
             depth_gt = depth_gt / 1000.0
+            image, depth_gt=self.train_preprocess(image, depth_gt)
             return process_data_light(image, depth_gt, self.depth_min, self.depth_max)
         
         elif self.mode == 'online_eval':

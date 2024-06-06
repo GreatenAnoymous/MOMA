@@ -23,13 +23,19 @@ from zoedepth.models.base_models.depth_anything import DepthAnythingCore
 import numpy as np
 from scipy.optimize import curve_fit
 import json
-
+import pandas as pd
 
 def model_function(xy, xc, yc, d, alpha, beta, fc):
     x, y,z  = xy
    # assuming z is the third element of xy
     return np.cos(beta)*np.cos(alpha)* z -np.sin(beta) * (x - xc) * z*fc  + np.sin(alpha)*np.cos(beta) * (y - yc) * z *fc + d
 
+
+def normalize_depth_robust(target, mask):
+    medium=np.median(target[mask])
+    target=target-medium
+    s=np.mean(np.abs(target[mask]-medium))
+    return target/s
 
 
 def build_model(config) -> DepthModel:
@@ -108,7 +114,7 @@ def get_random_samples(w, h, num_samples):
 
 
 
-def eval_for_one_grid_with_samples(depth_anything, image, depth, object_mask, depth_raw):
+def eval_for_one_with_random_samples(depth_anything, image, depth, object_mask, depth_raw, N):
     if object_mask is not None:
         object_mask=np.array(object_mask)
         object_mask=object_mask>0
@@ -119,6 +125,8 @@ def eval_for_one_grid_with_samples(depth_anything, image, depth, object_mask, de
     mask = np.logical_and((depth_raw> 0),(depth_raw<1))
     # if object_mask is not None:
     #     mask=mask & object_mask[:,:,0]
+    
+    
     
             
     # Flatten the depth_numpy and depth arrays
@@ -136,10 +144,32 @@ def eval_for_one_grid_with_samples(depth_anything, image, depth, object_mask, de
     # print(slope,"slope", intercept, "intercept")
     scaled_fitted_depths = depth_numpy * slope + intercept
     
-    # nonzero_indices = np.nonzero(depth_raw)
-    interval=5
-    nonzero_indices = get_grids_sample(depth_raw.shape[0], depth_raw.shape[1], interval)
-    nonzero_indices = nonzero_indices[:, depth_raw[nonzero_indices] != 0]
+
+
+    nonzero_indices = np.nonzero(depth_raw)
+    
+    array1, array2 = nonzero_indices
+    
+    # Ensure both arrays are of the same size
+    assert len(array1) == len(array2), "Arrays in the tuple must be of the same size"
+    
+    # Total number of available indices
+    total_indices = len(array1)
+    
+    # Randomly sample N indices from the available indices
+    sampled_indices = np.random.choice(total_indices, N, replace=False)
+    
+    
+    # Use the sampled indices to create new arrays
+    sampled_array1 = array1[sampled_indices]
+    sampled_array2 = array2[sampled_indices]
+
+    assert len(sampled_array1)==N, "Sampled array1 must have N elements"
+
+    nonzero_indices = (sampled_array1, sampled_array2)
+
+    # print(len(nonzero_indices),nonzero_indices)
+    
     x_data = nonzero_indices[0]
     y_data = nonzero_indices[1]
     z_data = depth_numpy[nonzero_indices]
@@ -150,7 +180,7 @@ def eval_for_one_grid_with_samples(depth_anything, image, depth, object_mask, de
     z_data = depth_numpy[nonzero_indices]
     zt_data = depth_raw[nonzero_indices]
 
-    initial_guess = [0, 0, 0, 0, 0, 1]
+    initial_guess=np.random.rand(6)
     popt, pcov = curve_fit(model_function, (x_data, y_data, z_data), zt_data, p0=initial_guess)
 
 
@@ -168,7 +198,7 @@ def eval_for_one_grid_with_samples(depth_anything, image, depth, object_mask, de
     gt_mask= np.logical_and(depth>0, depth<1)
     # print(object_mask[:,:,0].min(), object_mask[:,:,0].max())
 
-    # gt_mask=np.logical_and(gt_mask, object_mask[:,:,0])
+    gt_mask=np.logical_and(gt_mask, object_mask[:,:,0])
 
     metrics=compute_errors(depth[gt_mask], fitted_depths[gt_mask])
     absolute_diff = np.abs(depth[gt_mask] - fitted_depths[gt_mask])
@@ -191,13 +221,13 @@ def eval_for_one(depth_anything, image, depth, object_mask, depth_raw):
     if object_mask is not None:
         object_mask=np.array(object_mask)
         object_mask=object_mask>0
-    depth_numpy = depth_anything.infer_pil(image)
-
+    depth_zoe = depth_anything.infer_pil(image)
+    depth_numpy = normalize_depth_robust(depth_zoe, depth_zoe>0)
+    
     depth_raw=np.array(depth_raw)
     depth_raw[np.isnan(depth_raw)] = 0
     mask = np.logical_and((depth_raw> 0),(depth_raw<1))
-    # if object_mask is not None:
-    #     mask=mask & object_mask[:,:,0]
+
     
             
     # Flatten the depth_numpy and depth arrays
@@ -215,17 +245,17 @@ def eval_for_one(depth_anything, image, depth, object_mask, depth_raw):
     # print(slope,"slope", intercept, "intercept")
     scaled_fitted_depths = depth_numpy * slope + intercept
     
-    nonzero_indices = np.nonzero(depth_raw)
+
     nonzero_indices = np.nonzero(depth_raw)
     x_data = nonzero_indices[0]
     y_data = nonzero_indices[1]
     z_data = depth_numpy[nonzero_indices]
     zt_data = depth_raw[nonzero_indices]
 
-    initial_guess = [0, 0, 0, 0, 0, 1]
+    initial_guess=np.random.rand(6)
     popt, pcov = curve_fit(model_function, (x_data, y_data, z_data), zt_data, p0=initial_guess)
 
-
+    # xc_opt, yc_opt,  d_opt, lambda1_opt, lambda2_opt, lambda3_opt =[774.6724988288931, -893.5787484362147, 0.5205030005998124, 1.0907786593742994, 2.172754788378457, -0.0022836359312404853]
     xc_opt, yc_opt,  d_opt, lambda1_opt, lambda2_opt, lambda3_opt = popt
 
     fitted_depths=np.zeros_like(depth_raw)
@@ -240,7 +270,7 @@ def eval_for_one(depth_anything, image, depth, object_mask, depth_raw):
     gt_mask= np.logical_and(depth>0, depth<1)
     # print(object_mask[:,:,0].min(), object_mask[:,:,0].max())
 
-    # gt_mask=np.logical_and(gt_mask, object_mask[:,:,0])
+    gt_mask=np.logical_and(gt_mask, object_mask[:,:,0])
 
     metrics=compute_errors(depth[gt_mask], fitted_depths[gt_mask])
     absolute_diff = np.abs(depth[gt_mask] - fitted_depths[gt_mask])
@@ -253,8 +283,8 @@ def eval_for_one(depth_anything, image, depth, object_mask, depth_raw):
     absolute_diff_linear = np.abs(depth[gt_mask] - scaled_fitted_depths[gt_mask])
     mean_absolute_error_linear = np.mean(absolute_diff_linear)
 
-    metrics_zoedepth=compute_errors(depth[gt_mask], depth_numpy[gt_mask])
-    absolute_diff_zoedepth = np.abs(depth[gt_mask] - depth_numpy[gt_mask])
+    metrics_zoedepth=compute_errors(depth[gt_mask], depth_zoe[gt_mask])
+    absolute_diff_zoedepth = np.abs(depth[gt_mask] - depth_zoe[gt_mask])
     mean_absolute_error_zoedepth = np.mean(absolute_diff_zoedepth)
     
     return metrics, mean_absolute_error, metrics_linear, mean_absolute_error_linear, metrics_zoedepth, mean_absolute_error_zoedepth
@@ -318,8 +348,8 @@ def eval_cleargrasp():
     print(metrics2)
     print(metrics3)
     
-    
-def save_tmp(metrics1, metrics2, metrics3, count):
+
+def save_tmp(metrics1, metrics2, metrics3, count, filename="tmp.json"):
     tmp_metrics1=metrics1.copy()
     tmp_metrics2=metrics2.copy()
     tmp_metrics3=metrics3.copy()
@@ -342,8 +372,9 @@ def save_tmp(metrics1, metrics2, metrics3, count):
     tmp_metrics3["rmse"]/=count
     tmp_metrics3["mae"]/=count
     
-    with open("tmp.json", "w") as f:
+    with open(filename, "w") as f:
         json.dump({"metrics1":tmp_metrics1, "metrics2":tmp_metrics2, "metrics3": tmp_metrics3}, f)
+
 
 def eval_transcg():
     model=load_dam_model()
@@ -429,5 +460,117 @@ def eval_transcg():
 
 
 
+def eval_arcl():
+    model=load_dam_model()
+    metrics1={"a1":0, "a2":0, "a3":0, "abs_rel":0, "rmse":0, "mae":0}
+    metrics2={"a1":0, "a2":0, "a3":0, "abs_rel":0, "rmse":0, "mae":0}
+    metrics3={"a1":0, "a2":0, "a3":0, "abs_rel":0, "rmse":0, "mae":0}
+    count=0
+    data_id=3
+    for i in range(0,100):
+        try:
+            print(i)
+            image=cv2.imread(f"./data/nyu/test/00{data_id}/{i}_opaque_color.png")
+            image=cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            depth =np.array(Image.open(f"./data/nyu/test/00{data_id}/{i}_gt_depth.png"))/1000.
+            depth_raw=np.array(Image.open(f"./data/nyu/test/00{data_id}/{i}_gt_depth.png"))/1000.
+            mask_image=cv2.imread(f"./data/nyu/test/00{data_id}/{i}_mask.png")
+           
+            metrics, mean_absolute_error, metrics_linear, mean_absolute_error_linear, metrics_zoedepth ,mean_absolute_error_zoedepth=eval_for_one(model, image, depth, mask_image, depth_raw)
+            metrics1["a1"]+=metrics["a4"]
+            metrics1["a2"]+=metrics["a5"]
+            metrics1["a3"]+=metrics["a1"]
+            metrics1["abs_rel"]+=metrics["abs_rel"]
+            metrics1["rmse"]+=metrics["rmse"]
+            metrics1["mae"]+=mean_absolute_error
+            metrics2["a1"]+=metrics_linear["a4"]
+            metrics2["a2"]+=metrics_linear["a5"]
+            metrics2["a3"]+=metrics_linear["a1"]
+            metrics2["abs_rel"]+=metrics_linear["abs_rel"]
+            metrics2["rmse"]+=metrics_linear["rmse"]
+            metrics2["mae"]+=mean_absolute_error_linear
+            metrics3["a1"]+=metrics_zoedepth["a4"]
+            metrics3["a2"]+=metrics_zoedepth["a5"]
+            metrics3["a3"]+=metrics_zoedepth["a1"]
+            metrics3["abs_rel"]+=metrics_zoedepth["abs_rel"]
+            metrics3["rmse"]+=metrics_zoedepth["rmse"]
+            metrics3["mae"]+=mean_absolute_error_zoedepth
+            count+=1
+            save_tmp(metrics1, metrics2, metrics3, count, "./arcl_opaque.json")
+            
+        except Exception as e:
+
+            print(e)
+    metrics2["a1"]/=count
+    metrics2["a2"]/=count
+    metrics2["a3"]/=count
+    metrics2["abs_rel"]/=count
+    metrics2["rmse"]/=count
+    metrics2["mae"]/=count
+    metrics1["a1"]/=count
+    metrics1["a2"]/=count
+    metrics1["a3"]/=count
+    metrics1["abs_rel"]/=count
+    metrics1["rmse"]/=count
+    metrics1["mae"]/=count
+    metrics3["a1"]/=count
+    metrics3["a2"]/=count
+    metrics3["a3"]/=count
+    metrics3["abs_rel"]/=count
+    metrics3["rmse"]/=count
+    metrics3["mae"]/=count
+
+    print(metrics1)
+    print(metrics2)
+    print(metrics3)
+    
+
+def eval_samples():
+    model=load_dam_model()
+    
+    data_id=3
+    id=72
+    df=pd.DataFrame(columns=["N","a1", "a2", "a3", "abs_rel", "rmse", "mae"])
+    samples=np.arange(50, 3100, 100)
+    # image=cv2.imread(f"./data/nyu/test/00{data_id}/{id}_opaque_color.png")
+    # image=cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    # depth =np.array(Image.open(f"./data/nyu/test/00{data_id}/{id}_gt_depth.png"))/1000.
+    # depth_raw=np.array(Image.open(f"./data/nyu/test/00{data_id}/{id}_gt_depth.png"))/1000.
+    # mask_image=cv2.imread(f"./data/nyu/test/00{data_id}/{id}_mask.png")
+
+    depth=exr_loader(f"../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/0000000{data_id:02}-opaque-depth-img.exr", ndim = 1, ndim_representation = ['R'])
+    depth_raw=exr_loader(f"../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/0000000{data_id:02}-transparent-depth-img.exr", ndim = 1, ndim_representation = ['R'])
+    image = cv2.imread(f"../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/0000000{data_id:02}-transparent-rgb-img.jpg")
+    mask_image=cv2.imread(f"../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/0000000{data_id:02}-mask.png")
+    for N in samples:
+    
+
+        count=0
+        metrics1={"a1":0, "a2":0, "a3":0, "abs_rel":0, "rmse":0, "mae":0}
+        
+        for k in range(10):
+            try:
+                metrics, mean_absolute_error, metrics_linear, mean_absolute_error_linear, metrics_zoedepth ,mean_absolute_error_zoedepth=eval_for_one_with_random_samples(model, image, depth, mask_image, depth_raw, N)
+                count+=1
+                metrics1["a1"]+=metrics["a4"]
+                metrics1["a2"]+=metrics["a5"]
+                metrics1["a3"]+=metrics["a1"]
+                metrics1["abs_rel"]+=metrics["abs_rel"]
+                metrics1["rmse"]+=metrics["rmse"]
+                metrics1["mae"]+=mean_absolute_error
+            except Exception as e:
+                pass
+        
+        metrics1["a1"]/=count
+        metrics1["a2"]/=count
+        metrics1["a3"]/=count
+        metrics1["abs_rel"]/=count
+        metrics1["rmse"]/=count
+        metrics1["mae"]/=count
+        df.loc[len(df)]=[N, metrics1["a1"], metrics1["a2"], metrics1["a3"], metrics1["abs_rel"], metrics1["rmse"], metrics1["mae"]]
+    
+        df.to_csv('sample_eval.csv', index=False)
 # eval_cleargrasp()
-eval_transcg()
+# eval_transcg()
+# eval_arcl()
+# eval_samples()

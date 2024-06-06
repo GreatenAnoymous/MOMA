@@ -122,7 +122,7 @@ class MixedTrainer(zoedepth_trainer):
     
     @property
     def iters_per_epoch(self):
-        return len(self.train_loader1)+len(self.train_loader2)
+        return len(self.train_loader2)+len(self.train_loader1)
 
     def init_scheduler(self):
         
@@ -287,33 +287,7 @@ class MixedTrainer(zoedepth_trainer):
             ################################# Train loop ##########################################################
             if self.should_log:
                 wandb.log({"Epoch": epoch}, step=self.step)
-            pbar1 = tqdm(enumerate(self.train_loader1), desc=f"Epoch: {epoch + 1}/{self.config.epochs}. Loop: Train",
-                        total=self.iters_per_epoch) if is_rank_zero(self.config) else enumerate(self.train_loader1)
-            for i, batch in pbar1:
-                try:
-                    if self.should_early_stop():
-                        print("Early stopping")
-                        break
-                    losses = self.train_on_batch_ssi(batch, i)
-                    self.raise_if_nan(losses)
-                    if is_rank_zero(self.config) and self.config.print_losses:
-                        pbar1.set_description(
-                            f"Epoch: {epoch + 1}/{self.config.epochs}. Loop: Train. Losses: {stringify_losses(losses)}")
-                    self.scheduler.step()
 
-                    if self.should_log and self.step % 50 == 0:
-                        wandb.log({f"Train/{name}": loss.item()
-                                for name, loss in losses.items()}, step=self.step)
-                    self.step += 1     
-                    del losses, batch
-                    torch.cuda.empty_cache()       
-                except Exception as e:
-                    raise e
-                    print(f"Error: {e}")
-                except:
-                    del losses, batch
-                    torch.cuda.empty_cache()  
-                    print("Unknown error")
             pbar2 = tqdm(enumerate(self.train_loader2), desc=f"Epoch: {epoch + 1}/{self.config.epochs}. Loop: Train",
                         total=self.iters_per_epoch) if is_rank_zero(self.config) else enumerate(self.train_loader2)
             for i, batch in pbar2:
@@ -341,7 +315,36 @@ class MixedTrainer(zoedepth_trainer):
                 except:
                     del losses, batch
                     torch.cuda.empty_cache()  
-                    print("Unknown error")     
+                    print("Unknown error")    
+
+            if epoch % 20 != 1:
+                continue
+            pbar1 = tqdm(enumerate(self.train_loader1), desc=f"Epoch: {epoch + 1}/{self.config.epochs}. Loop: Train",
+                        total=self.iters_per_epoch) if is_rank_zero(self.config) else enumerate(self.train_loader1)
+            for i, batch in pbar1:
+                try:
+                    if self.should_early_stop():
+                        print("Early stopping")
+                        break
+                    losses = self.train_on_batch_ssi(batch, i)
+                    self.raise_if_nan(losses)
+                    if is_rank_zero(self.config) and self.config.print_losses:
+                        pbar1.set_description(
+                            f"Epoch: {epoch + 1}/{self.config.epochs}. Loop: Train. Losses: {stringify_losses(losses)}")
+                    self.scheduler.step()
+
+                    if self.should_log and self.step % 50 == 0:
+                        wandb.log({f"Train/{name}": loss.item()
+                                for name, loss in losses.items()}, step=self.step)
+                    self.step += 1     
+                    del losses, batch
+                    torch.cuda.empty_cache()       
+                except Exception as e:
+
+                    print(f"Error: {e}")
+                except: 
+                    print("Unknown error")
+            
             self.save_checkpoint("scale_opaque_ssi_transparent.pt")
         self.step += 1
 
@@ -366,7 +369,7 @@ def main_worker(gpu, ngpus_per_node, config):
         print(config.dataset)
         opaque_config= copy.deepcopy(config)
         
-        opaque_config.dataset="arcl"
+        opaque_config.dataset="nyu"
         print(opaque_config.dataset)
         train_loader_transparent = TransMixDataloader(config, "train").data
         train_loader_opaque = DepthDataLoader(opaque_config, "train").data

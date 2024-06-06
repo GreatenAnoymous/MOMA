@@ -21,7 +21,7 @@
 # SOFTWARE.
 
 # File author: Shariq Farooq Bhat
-
+from zoedepth.models.model_io import load_wts
 from zoedepth.utils.misc import count_parameters, parallelize
 from zoedepth.utils.config import get_config
 from zoedepth.utils.arg_utils import parse_unknown
@@ -100,6 +100,7 @@ def main_worker(gpu, ngpus_per_node, config):
 
         model = load_ckpt(config, model)
         model = parallelize(config, model)
+        model = load_wts(model, "./depth_anything_finetune/mixed.pt")
 
         total_params = f"{round(count_parameters(model)/1e6,2)}M"
         config.total_params = total_params

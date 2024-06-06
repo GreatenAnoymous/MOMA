@@ -532,7 +532,8 @@ def process_data_light(rgb,  depth_gt, depth_min, depth_max, depth_raw=None, dep
     depth_gt = cv2.resize(depth_gt, image_size, interpolation = cv2.INTER_NEAREST)
     if depth_raw is None:
         depth_raw=depth_gt
-        depth_gt_mask=np.ones_like(depth_gt)
+        # depth_gt_mask=np.ones_like(depth_gt)
+        depth_gt_mask=np.logical_and(depth_gt>1e-3,depth_gt< 2)
 
 
     rgb = rgb.transpose(2, 0, 1)
