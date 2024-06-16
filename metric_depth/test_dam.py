@@ -7,12 +7,13 @@ import torch.nn.functional as F
 import os
 import sys
 from exr_utils import exr_loader
-from zoedepth.utils.config import get_config
+
 from importlib import import_module
 project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../'))
-from zoedepth.models.model_io import load_wts
-import create_pc
 
+import create_pc
+from zoedepth.utils.config import get_config
+from zoedepth.models.model_io import load_wts
 from zoedepth.models.depth_model import DepthModel
 from zoedepth.models.builder import build_model
 from zoedepth.trainers.loss import ScaleAndShiftInvariantLoss, compute_scale_and_shift
@@ -25,38 +26,11 @@ from scipy import stats
 
 
 
-def model_function(xy, xc, yc, d, alpha, beta, fc):
+def model_function(xy,s,t, xc, yc, d, alpha, beta, fc):
     x, y,z  = xy
    # assuming z is the third element of xy
-    return np.cos(beta)*np.cos(alpha)* z -np.sin(beta) * (x - xc) * z*fc  + np.sin(alpha)*np.cos(beta) * (y - yc) * z *fc + d
+    return np.cos(beta)*np.cos(alpha)* (s*z+t) -np.sin(beta) * (x - xc) * (s*z+t)*fc  + np.sin(alpha)*np.cos(beta) * (y - yc) * (s*z+t) *fc + d
 
-
-# def local_alignment(ui,vi, u, v, depths, depths_gt,alpha=0.01 , b=1280):
-#     m= u.shape[0]
-
-#     W = np.zeros((m, m))  # Initialize weight matrix
-    
-#     for k in range(m):
-#         dist_k = np.sqrt((u[k] - ui)**2 + (v[k] - vi)**2)
-#         wk = 1 / np.sqrt(2 * np.pi) * np.exp(-alpha* dist_k**2 / (2 * b**2))
-#         W[k, k] = wk
-#     X = np.vstack((depths, np.ones_like(depths)))  # Construct X
-#     X = X.T
-
-#     depths_gt = depths_gt.reshape(-1, 1)
-#     XTWX = np.dot(np.dot(X.T, W), X)
-#     print(XTWX)
-#     XTWy = np.dot(np.dot(X.T, W), depths_gt) 
-#     beta = np.dot(np.linalg.inv(XTWX), XTWy)
-#     return beta
-
-# def compute_local_alignment(u, v, depths, depths_gt, M, N, b=2):
-#     m = u.shape[0]
-#     beta = np.zeros((2, M, N))
-#     for i in range(M):
-#         for j in range(N):
-#             beta[:, i, j] = local_alignment(i, j, u, v, depths, depths_gt, b).flatten()
-#     return beta
 
 def compute_local_alignment(u, v, depths, depths_gt, M, N, b=100, alpha=1):
     # Compute distance matrix
@@ -268,7 +242,7 @@ class DAM(object):
         if depth_raw is not None:
             depth_raw=np.array(depth_raw)
             depth_raw[np.isnan(depth_raw)] = 0
-            mask = np.logical_and((depth_raw> 0),(depth_raw<1))
+            mask = np.logical_and((depth_raw> 0),(depth_raw<2))
             # if object_mask is not None:
             #     mask=mask & object_mask[:,:,0]
             
@@ -303,22 +277,22 @@ class DAM(object):
             
             nonzero_indices = np.nonzero(depth_raw)
 
-            array1, array2 = nonzero_indices
+            # array1, array2 = nonzero_indices
 
-            total_indices = len(array1)
-            N=100
+            # total_indices = len(array1)
+            # # N=100
     
-            # Randomly sample N indices from the available indices
-            sampled_indices = np.random.choice(total_indices, N, replace=False)
+            # # Randomly sample N indices from the available indices
+            # sampled_indices = np.random.choice(total_indices, N, replace=False)
             
             
-            # Use the sampled indices to create new arrays
-            sampled_array1 = array1[sampled_indices]
-            sampled_array2 = array2[sampled_indices]
+            # # Use the sampled indices to create new arrays
+            # sampled_array1 = array1[sampled_indices]
+            # sampled_array2 = array2[sampled_indices]
 
-            assert len(sampled_array1)==N, "Sampled array1 must have N elements"
+            # assert len(sampled_array1)==N, "Sampled array1 must have N elements"
 
-            nonzero_indices = (sampled_array1, sampled_array2)
+            # nonzero_indices = (sampled_array1, sampled_array2)
 
 
             x_data = nonzero_indices[0]
@@ -329,21 +303,20 @@ class DAM(object):
             # y_data = nonzero_indices[1]
             # z_data = depth_numpy[nonzero_indices]
             # zt_data=depth[nonzero_indices]
-            initial_guess = np.random.rand(6)
+            initial_guess = [1,0,0,0,0,0,0,0]
             popt, pcov = curve_fit(model_function, (x_data, y_data, z_data), zt_data, p0=initial_guess)
+            print(popt)
 
-            # xc_opt, yc_opt,  d_opt, lambda1_opt, lambda2_opt, lambda3_opt =[534.2324844480863, -190.42289893222687, -0.4183163449642485, 0.0001494418507248443, 0.0011123054000330792, 2.994101666824724]
-            # xc_opt, yc_opt,  d_opt, lambda1_opt, lambda2_opt, lambda3_opt =[-12876.598818650644, 3879.3807488025254, 0.09036849843330247, 1.7720131641397066e-05, 7.030278082064835e-05, 0.4987274794212721]
-            xc_opt, yc_opt,  d_opt, lambda1_opt, lambda2_opt, lambda3_opt = popt
+
+            s,t, xc, yc, d, alpha, beta, fc = popt
 
             fitted_depths=np.zeros_like(depth_raw)
             for i in range(depth.shape[0]):
                 for j in range(depth.shape[1]):
-                    fitted_depths[i,j]=model_function((i,j,depth_numpy[i,j]), xc_opt, yc_opt,  d_opt, lambda1_opt, lambda2_opt, lambda3_opt)
+                    fitted_depths[i,j]=model_function((i,j,depth_numpy[i,j]),s,t, xc, yc, d, alpha, beta, fc)
             
             # print(depth_numpy.shape, depth.shape, torch.tensor(mask).unsqueeze(0).unsqueeze(0).shape)
-            print([xc_opt, yc_opt, d_opt, lambda1_opt, lambda2_opt, lambda3_opt])
-            # # Calculate absolute differences between original and fitted depth maps
+            
             
             gt_mask= np.logical_and(depth>0, depth<1)
             # print(object_mask[:,:,0].min(), object_mask[:,:,0].max())
@@ -493,21 +466,21 @@ def generate_fake_depth(input_folder, output_folder):
 
     
 dam =DAM()
-depth=exr_loader("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000034-opaque-depth-img.exr", ndim = 1, ndim_representation = ['R'])
-depth_raw=exr_loader("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000034-transparent-depth-img.exr", ndim = 1, ndim_representation = ['R'])
-image = cv2.imread("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000034-transparent-rgb-img.jpg")
-mask_image=cv2.imread("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000034-mask.png")
+# depth=exr_loader("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000034-opaque-depth-img.exr", ndim = 1, ndim_representation = ['R'])
+# depth_raw=exr_loader("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000034-transparent-depth-img.exr", ndim = 1, ndim_representation = ['R'])
+# image = cv2.imread("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000034-transparent-rgb-img.jpg")
+# mask_image=cv2.imread("../../cleargrasp/cleargrasp-dataset-test-val/real-test/d415/000000034-mask.png")
 
 
 
 from PIL import Image
-# image=cv2.imread("./data/nyu/transcg/scene97/81/rgb1.png")
-# depth =np.array(Image.open("./data/nyu/transcg/scene97/81/depth1-gt.png"))
-# depth_raw=np.array(Image.open("./data/nyu/transcg/scene97/81/depth1-gt.png"))
-# mask_image=cv2.imread("./data/nyu/transcg/scene97/81/depth1-gt-mask.png")
+image=cv2.imread("./data/nyu/transcg/scene1/0/rgb2.png")
+depth =np.array(Image.open("./data/nyu/transcg/scene1/0/depth2-gt.png"))
+depth_raw=np.array(Image.open("./data/nyu/transcg/scene1/0/depth2-gt.png"))
+mask_image=cv2.imread("./data/nyu/transcg/scene1/0/depth2-gt-mask.png")
 
 
-# id=3
+# id=31
 # data_id=6
 # image=cv2.imread(f"./data/nyu/test/00{data_id}/{id}_opaque_color.png")
 # image=cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -521,7 +494,7 @@ from PIL import Image
 # # image=cv2.imread("./data/nyu/clearpose_downsample_100/set1/scene1/010100-color.png")
 # # depth =np.array(Image.open("./data/nyu/clearpose_downsample_100/set1/scene1/010100-depth.png"))
 
-scale=1
+scale=4000
 # # depth=dam.testDAM(image, depth/scale)
 dam.predictDepth(image, depth/scale,object_mask=mask_image, depth_raw=depth_raw/scale)
 # # dam.dump_to_pointcloud(image)

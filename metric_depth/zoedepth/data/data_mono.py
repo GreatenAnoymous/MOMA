@@ -54,6 +54,7 @@ from .omniverse import get_omniverse_loader,OmniverseObject
 from .depth_complete import *
 from .data_preparation import ToTensor
 from .clearpose import ClearPoseDataset
+from .keypose import KeyPose
 
 
 def preprocessing_transforms(mode, **kwargs):
@@ -257,6 +258,7 @@ class TransMixDataloader(object):
         transcg_conf=change_dataset(edict(config), 'transcg')
     
         clearpose_conf=change_dataset(edict(config), 'clearpose')
+        keypose_conf=change_dataset(edict(config), 'keypose')
         img_size = self.config.get("img_size", None)
         if mode=="train":
             # cleargrasp_loader=DepthDataLoader(cleargrasp_conf, mode, device=device, transform=preprocessing_transforms(mode, size=img_size)).data
@@ -268,7 +270,8 @@ class TransMixDataloader(object):
             omniverse_data=OmniverseObject(omniverse_conf.data_root, split='train',**omniverse_conf)
             transcg_data=ClearPoseDataset(transcg_conf, 'train', device=device)
             clearpose_data=ClearPoseDataset(clearpose_conf, 'train', device=device)
-            self.data=DataLoader(ConcatDataset([cleargrasp_data, omniverse_data, transcg_data, clearpose_data]), batch_size=config.batch_size, shuffle=True, num_workers=config.workers, pin_memory=False)
+            keypose_data=KeyPose(keypose_conf.data_root, split='test',**keypose_conf)
+            self.data=DataLoader(ConcatDataset([keypose_data,cleargrasp_data, omniverse_data, transcg_data, clearpose_data]), batch_size=config.batch_size, shuffle=True, num_workers=config.workers, pin_memory=False)
         else:
             self.data=DepthDataLoader(transcg_conf, mode, device=device).data
 

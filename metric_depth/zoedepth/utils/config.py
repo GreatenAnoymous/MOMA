@@ -176,6 +176,16 @@ DATASETS_CONFIG = {
         "max_depth": 2,
         "data_root": "/mnt/ssd_990/teng/BinPicking/cleargrasp/"
     },
+
+
+    "keypose":{
+        "dataset": "keypose",
+        "min_depth_eval": 1e-3,
+        "max_depth_eval": 2,
+        "min_depth": 1e-3,
+        "max_depth": 2,
+        "data_root": "/mnt/ssd_990/teng/BinPicking/keypose/data/"
+    },
     
     "arcl":{
         "dataset": "arcl",
@@ -459,7 +469,7 @@ def get_config(model_name, mode='train', dataset=None, **overwrite_kwargs):
     check_choices("Model", model_name, ["zoedepth", "zoedepth_nk", "damc"])
     check_choices("Mode", mode, ["train", "infer", "eval"])
     if mode == "train":
-        check_choices("Dataset", dataset, ["nyu", "kitti", "mix", "cleargrasp", "omniverse", "clearpose", "transcg", "arcl"  ,None])
+        check_choices("Dataset", dataset, ["nyu", "kitti", "mix", "cleargrasp", "omniverse", "clearpose", "keypose" ,"transcg", "arcl"  ,None])
 
     config = flatten({**COMMON_CONFIG, **COMMON_TRAINING_CONFIG})
     config = update_model_config(config, mode, model_name)
