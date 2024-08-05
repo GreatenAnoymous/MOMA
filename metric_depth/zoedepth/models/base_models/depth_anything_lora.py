@@ -52,7 +52,7 @@ class DepthAnythingLoraCore(DepthAnythingCore):
     def build(midas_model_type="dinov2_large", train_midas=False, use_pretrained_midas=True, fetch_features=False, freeze_bn=True, force_keep_ar=False, force_reload=False, **kwargs):
         if "img_size" in kwargs:
             kwargs = DepthAnythingCore.parse_img_size(kwargs)
-        img_size = kwargs.pop("img_size", [384, 384])
+        img_size = kwargs.pop("img_size", [392, 392])
         
         depth_anything = DPT_DINOv2(out_channels=[256, 512, 1024, 1024], use_clstoken=False)
         

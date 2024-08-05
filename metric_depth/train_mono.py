@@ -35,6 +35,8 @@ import numpy as np
 from pprint import pprint
 import argparse
 import os
+from zoedepth.models.model_io import load_wts
+
 
 os.environ["PYOPENGL_PLATFORM"] = "egl"
 os.environ["WANDB_START_METHOD"] = "thread"
@@ -61,7 +63,7 @@ def load_ckpt(config, model, checkpoint_dir="./checkpoints", ckpt_type="best"):
     import glob
     import os
 
-    from zoedepth.models.model_io import load_wts
+    
 
     if hasattr(config, "checkpoint"):
         checkpoint = config.checkpoint
@@ -92,6 +94,7 @@ def main_worker(gpu, ngpus_per_node, config):
         # print(model)
             
         model = load_ckpt(config, model)
+        # model = load_wts(model, "./depth_anything_finetune/mixed.pt")
         model = parallelize(config, model)
         total_params = f"{round(count_parameters(model)/1e6,2)}M"
         config.total_params = total_params

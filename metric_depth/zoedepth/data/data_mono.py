@@ -188,7 +188,7 @@ class DepthDataLoader(object):
 
         elif mode == 'online_eval':
             print("Using online eval sampler")
-            self.testing_samples = DataLoadPreprocessWithMask(
+            self.testing_samples = DataLoadPreprocess(
                 config, mode, transform=transform)
             if config.distributed:  # redundant. here only for readability and to be more explicit
                 # Give whole test set to all processes (and report evaluation only on one) regardless
@@ -203,7 +203,7 @@ class DepthDataLoader(object):
                                    sampler=self.eval_sampler)
 
         elif mode == 'test':
-            self.testing_samples = DataLoadPreprocessWithMask(
+            self.testing_samples = DataLoadPreprocess(
                 config, mode, transform=transform)
             self.data = DataLoader(self.testing_samples,
                                    1, shuffle=False, num_workers=1)
@@ -270,8 +270,8 @@ class TransMixDataloader(object):
             omniverse_data=OmniverseObject(omniverse_conf.data_root, split='train',**omniverse_conf)
             transcg_data=ClearPoseDataset(transcg_conf, 'train', device=device)
             clearpose_data=ClearPoseDataset(clearpose_conf, 'train', device=device)
-            keypose_data=KeyPose(keypose_conf.data_root, split='test',**keypose_conf)
-            self.data=DataLoader(ConcatDataset([keypose_data,cleargrasp_data, omniverse_data, transcg_data, clearpose_data]), batch_size=config.batch_size, shuffle=True, num_workers=config.workers, pin_memory=False)
+            # keypose_data=KeyPose(keypose_conf.data_root, split='test',**keypose_conf)
+            self.data=DataLoader(ConcatDataset([ cleargrasp_data, omniverse_data, transcg_data, clearpose_data]), batch_size=config.batch_size, shuffle=True, num_workers=config.workers, pin_memory=False)
         else:
             self.data=DepthDataLoader(transcg_conf, mode, device=device).data
 

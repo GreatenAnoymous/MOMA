@@ -94,11 +94,11 @@ class ClearPoseDataset(Dataset):
                 self.config.gt_path, remove_leading_slash(sample_path.split()[1]))
             image = Image.open(image_path)
             depth_gt = Image.open(depth_path)
-            if self.config.do_random_rotate and (self.config.aug):
-                random_angle = (random.random() - 0.5) * 2 * self.config.degree
-                image = self.rotate_image(image, random_angle)
-                depth_gt = self.rotate_image(
-                    depth_gt, random_angle, flag=Image.NEAREST)
+        
+            random_angle = (random.random() - 0.5) * 2 * self.config.degree
+            image = self.rotate_image(image, random_angle)
+            depth_gt = self.rotate_image(
+                depth_gt, random_angle, flag=Image.NEAREST)
         
             image = np.asarray(image, dtype=np.float32) 
             depth_gt = np.asarray(depth_gt, dtype=np.float32)

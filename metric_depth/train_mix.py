@@ -100,7 +100,7 @@ def main_worker(gpu, ngpus_per_node, config):
 
         model = load_ckpt(config, model)
         model = parallelize(config, model)
-        model = load_wts(model, "./depth_anything_finetune/mixed.pt")
+        model = load_wts(model, "./depth_anything_finetune/mixed2.pt")
 
         total_params = f"{round(count_parameters(model)/1e6,2)}M"
         config.total_params = total_params

@@ -305,8 +305,8 @@ class DataLoadPreprocessWithMask(DataLoadPreprocess):
             image = self.reader.open(image_path)
             depth_gt = self.reader.open(depth_path)
             
-            # depth_mask_path = os.path.splitext(depth_path)[0] + "-mask.png"  # for transCG
-            depth_mask_path=depth_path.split("-")[0]+"-label.png" # for clearpose
+            depth_mask_path = os.path.splitext(depth_path)[0] + "-mask.png"  # for transCG
+            # depth_mask_path=depth_path.split("-")[0]+"-label.png" # for clearpose
             print(depth_mask_path)
 
             depth_mask = self.reader.open(depth_mask_path)

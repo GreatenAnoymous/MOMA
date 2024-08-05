@@ -11,7 +11,7 @@ from zoedepth.utils.config import get_config
 from importlib import import_module
 project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../'))
 from zoedepth.models.model_io import load_wts
-import create_pc
+
 
 from zoedepth.models.base_models.depth_anything_complete import DepthCompleteCore
 from zoedepth.models.builder import build_model
@@ -23,7 +23,7 @@ import cv2
 import numpy as np
 from scipy.optimize import curve_fit
 
-h5path="/mnt/ssd_990/teng/BinPicking/DPT_transparent_objects/metric_depth/data/nyu/omniverse_v3/train/20200910/output.1599770697.5171943.h5"
+h5path="/mnt/ssd_990/teng/BinPicking/DPT_transparent_objects/metric_depth/data/nyu/omniverse_v3/train/20200910/output.1600130896.7054846.h5"
 f = h5py.File(h5path, 'r')
 rgb = cv2.cvtColor(f['rgb_glass'][:], cv2.COLOR_RGB2BGR)
 disparity = f['depth'][:]
