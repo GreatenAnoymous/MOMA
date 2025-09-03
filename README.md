@@ -1,6 +1,4 @@
-Got it 👍 Let’s make it short and clean:
 
----
 
 # Robotics Manipulation via Monocular Depth Estimation with One-Shot Adaptation
 
